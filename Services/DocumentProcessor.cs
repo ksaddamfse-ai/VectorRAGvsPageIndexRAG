@@ -1,11 +1,12 @@
 using System.Text;
 using UglyToad.PdfPig;
+using VectorRAGvsPageIndexRAG.Services.Interfaces;
 
 namespace VectorRAGvsPageIndexRAG.Services;
 
-public static class DocumentProcessor
+public class DocumentProcessor : IDocumentProcessor
 {
-    public static string ExtractText(Stream pdfStream)
+    public string ExtractText(Stream pdfStream)
     {
         using var pdf = PdfDocument.Open(pdfStream);
         var sb = new StringBuilder();

@@ -4,6 +4,7 @@ using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Options;
 using VectorRAGvsPageIndexRAG.DTOs;
 using VectorRAGvsPageIndexRAG.Models;
+using VectorRAGvsPageIndexRAG.Services.Interfaces;
 using VectorRAGvsPageIndexRAG.Settings;
 
 namespace VectorRAGvsPageIndexRAG.Services;
@@ -11,6 +12,7 @@ namespace VectorRAGvsPageIndexRAG.Services;
 public class PageIndexService(
     DocumentTreeBuilder treeBuilder,
     IChatClientFactory clientFactory,
+    IDocumentProcessor documentProcessor,
     IOptions<PageIndexSettings> settings,
     ILogger<PageIndexService> logger)
 {
@@ -20,7 +22,7 @@ public class PageIndexService(
         string provider = "NvidiaNim", string model = "meta/llama-3.3-70b-instruct")
     {
         using var stream = file.OpenReadStream();
-        var text = DocumentProcessor.ExtractText(stream);
+        var text = documentProcessor.ExtractText(stream);
 
         var tree = await treeBuilder.BuildTreeAsync(text, file.FileName, provider, model);
 

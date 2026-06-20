@@ -4,16 +4,26 @@
 
 ASP.NET Core 10 Web API. Compares Vector RAG and Page Index RAG.
 
-## Architecture
+## Architecture (Clean Architecture)
 
-- `Services/RagIngestionService.cs` — PDF → chunk → embed → Qdrant
-- `Services/RagQueryService.cs` — question → embed → Qdrant search → LLM answer
-- `Services/DocumentProcessor.cs` — PDF text extraction via PdfPig
-- `Controllers/RagController.cs` — POST /api/rag/documents + /api/rag/query
-- `Program.cs` — DI: keyed IChatClient, default IEmbeddingGenerator, QdrantClient singleton
-- `Microsoft.Extensions.AI` for embeddings + chat abstraction
-- `Qdrant.Client` for vector store (gRPC, port 6334)
-- `Microsoft.SemanticKernel.Text.TextChunker` for document splitting
+```
+Controllers/          — Presentation layer
+DTOs/                 — Application DTOs (request/response models)
+Models/               — Domain entities
+Services/             — Application services + interfaces
+  Interfaces/         — Service abstractions
+Settings/             — Configuration models
+Filters/              — Swagger filters
+```
+
+## Key Services
+
+| Interface | Implementation | Responsibility |
+|---|---|---|
+| `IRagIngestionService` | `RagIngestionService` | PDF → chunk → embed → Qdrant |
+| `IRagQueryService` | `RagQueryService` | question → embed → Qdrant search → LLM answer |
+| `IDocumentProcessor` | `DocumentProcessor` | PDF text extraction via PdfPig |
+| `IChatClientFactory` | `ChatClientFactory` | Keyed IChatClient resolution |
 
 ## Key Design Decisions
 
@@ -21,8 +31,15 @@ ASP.NET Core 10 Web API. Compares Vector RAG and Page Index RAG.
 - Vector size derived from actual embedding output at runtime (not in config)
 - Qdrant collection auto-created with correct vector size on first ingest
 - Reuses `IChatClientFactory` from existing infrastructure
-- No IVectorStore abstraction — Qdrant.Client directly (YAGNI until second provider)
+- Qdrant.Client directly (no IVectorStore abstraction — YAGNI until second provider)
 - Port 6334 for gRPC (not 6333 which is HTTP REST)
+
+## DI Registration (Program.cs)
+
+- Keyed `IChatClient` per provider/model from `ProviderRegistry`
+- Default `IEmbeddingGenerator` singleton from `EmbeddingRegistry.ActiveEmbeddingProvider`
+- `QdrantClient` singleton from `VectorStoreRegistry.ActiveProvider`
+- Application services registered as singletons via interfaces
 
 ## Config
 

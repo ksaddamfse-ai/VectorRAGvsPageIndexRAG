@@ -2,6 +2,8 @@ using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Options;
 using Qdrant.Client;
 using Qdrant.Client.Grpc;
+using VectorRAGvsPageIndexRAG.DTOs;
+using VectorRAGvsPageIndexRAG.Services.Interfaces;
 using VectorRAGvsPageIndexRAG.Settings;
 
 namespace VectorRAGvsPageIndexRAG.Services;
@@ -10,7 +12,7 @@ public class RagQueryService(
     IChatClientFactory clientFactory,
     IEmbeddingGenerator<string, Embedding<float>> embedder,
     QdrantClient qdrant,
-    IOptions<VectorStoreRegistryEntry> vsConfig)
+    IOptions<VectorStoreRegistryEntry> vsConfig) : IRagQueryService
 {
     public async Task<RagQueryResponse> QueryAsync(RagQueryRequest request)
     {
@@ -43,18 +45,3 @@ public class RagQueryService(
         return new RagQueryResponse(answer.Text ?? "No answer generated.", chunks);
     }
 }
-
-public record RagQueryRequest(
-    string Question,
-    string Provider,
-    string Model,
-    int TopK = 5);
-
-public record RagQueryResponse(
-    string Answer,
-    List<RagChunkResult> Chunks);
-
-public record RagChunkResult(
-    string Text,
-    string Source,
-    double Score);

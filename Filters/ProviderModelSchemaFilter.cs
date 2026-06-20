@@ -2,7 +2,7 @@ using Microsoft.Extensions.Options;
 using Microsoft.OpenApi.Any;
 using Microsoft.OpenApi.Models;
 using Swashbuckle.AspNetCore.SwaggerGen;
-using VectorRAGvsPageIndexRAG.Services;
+using VectorRAGvsPageIndexRAG.DTOs;
 using VectorRAGvsPageIndexRAG.Settings;
 
 namespace VectorRAGvsPageIndexRAG;
@@ -12,13 +12,15 @@ public class ProviderModelSchemaFilter(
 {
     public void Apply(OpenApiSchema schema, SchemaFilterContext context)
     {
+        if (context.Type != typeof(RagQueryRequest)) return;
+
         var providers = registry.Value.Where(e => e.Value.Enabled).Select(e => e.Key).ToList();
         var models = registry.Value.SelectMany(e => e.Value.Models).Distinct().ToList();
 
-        if (schema.Properties.TryGetValue("provider", out var provProp))
+        if (schema.Properties.TryGetValue("provider", out var providerProp))
         {
-            provProp.Enum = providers.Select(p => new OpenApiString(p)).Cast<IOpenApiAny>().ToList();
-            provProp.Default = new OpenApiString("NvidiaNim");
+            providerProp.Enum = providers.Select(p => new OpenApiString(p)).Cast<IOpenApiAny>().ToList();
+            providerProp.Default = new OpenApiString("NvidiaNim");
         }
 
         if (schema.Properties.TryGetValue("model", out var modelProp))
