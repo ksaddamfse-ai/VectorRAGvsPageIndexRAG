@@ -90,7 +90,3 @@ Query:   Q + docId → LLM navigates skeleton → fetch node texts → LLM answe
 | `PageIndex` | SQLite path (`DbPath: "pageindex.db"`) |
 
 Vector size is derived from the active embedding model's output at runtime. No config duplication.
-
-### Learning Journal
-
-Project learnings and decisions are tracked in `LEARNINGS.md` (gitignored).
