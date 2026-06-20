@@ -12,17 +12,22 @@ public class ProviderModelSchemaFilter(
 {
     public void Apply(OpenApiSchema schema, SchemaFilterContext context)
     {
-        if (context.Type != typeof(RagQueryRequest)) return;
-
         var providers = registry.Value.Where(e => e.Value.Enabled).Select(e => e.Key).ToList();
         var models = registry.Value.SelectMany(e => e.Value.Models).Distinct().ToList();
 
-        schema.Properties["provider"].Enum =
-            providers.Select(p => new OpenApiString(p)).Cast<IOpenApiAny>().ToList();
-        schema.Properties["provider"].Default = new OpenApiString("OpenRouter");
+        if (schema.Properties.TryGetValue("provider", out var provProp))
+        {
+            provProp.Enum = providers.Select(p => new OpenApiString(p)).Cast<IOpenApiAny>().ToList();
+            provProp.Default = new OpenApiString("NvidiaNim");
+        }
 
-        schema.Properties["model"].Enum =
-            models.Select(m => new OpenApiString(m)).Cast<IOpenApiAny>().ToList();
-        schema.Properties["model"].Default = new OpenApiString("openrouter/free");
+        if (schema.Properties.TryGetValue("model", out var modelProp))
+        {
+            modelProp.Enum = models.Select(m => new OpenApiString(m)).Cast<IOpenApiAny>().ToList();
+            modelProp.Default = new OpenApiString("meta/llama-3.3-70b-instruct");
+        }
+
+        if (schema.Properties.TryGetValue("topK", out var topKProp))
+            topKProp.Default = new OpenApiInteger(2);
     }
 }
