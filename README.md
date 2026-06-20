@@ -18,6 +18,7 @@ PDF ingestion → LLM builds hierarchical document tree → stored in SQLite →
 | `POST` | `/api/rag/query` | Vector: embed question → search → LLM answer |
 | `POST` | `/api/pageindex/documents` | PageIndex: ingest PDF, build tree via LLM, store in SQLite |
 | `POST` | `/api/pageindex/query` | PageIndex: LLM navigates tree → fetch sections → LLM answer |
+| `GET` | `/api/compare/query` | Compare both strategies side-by-side with same question |
 | `POST` | `/api/chat` | Direct LLM chat (no RAG) |
 
 ### Quick Start
