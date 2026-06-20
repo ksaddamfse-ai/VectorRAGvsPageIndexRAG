@@ -1,12 +1,13 @@
 using Microsoft.AspNetCore.Mvc;
 using VectorRAGvsPageIndexRAG.DTOs;
 using VectorRAGvsPageIndexRAG.Services;
+using VectorRAGvsPageIndexRAG.Services.Interfaces;
 
 namespace VectorRAGvsPageIndexRAG;
 
 [ApiController]
 [Route("api/pageindex")]
-public class PageIndexController(PageIndexService pageIndexService) : ControllerBase
+public class PageIndexController(IPageIndexService pageIndexService) : ControllerBase
 {
     [HttpPost("documents")]
     [ProducesResponseType<PageIndexIngestionResponse>(StatusCodes.Status201Created)]
