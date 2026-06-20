@@ -17,14 +17,19 @@ public class ProviderModelSchemaFilter(
         var providers = registry.Value.Where(e => e.Value.Enabled).Select(e => e.Key).ToList();
         var models = registry.Value.SelectMany(e => e.Value.Models).Distinct().ToList();
 
-        schema.Properties["provider"].Enum =
-            providers.Select(p => new OpenApiString(p)).Cast<IOpenApiAny>().ToList();
-        schema.Properties["provider"].Default = new OpenApiString("NvidiaNim");
+        if (schema.Properties.TryGetValue("provider", out var providerProp))
+        {
+            providerProp.Enum = providers.Select(p => new OpenApiString(p)).Cast<IOpenApiAny>().ToList();
+            providerProp.Default = new OpenApiString("NvidiaNim");
+        }
 
-        schema.Properties["model"].Enum =
-            models.Select(m => new OpenApiString(m)).Cast<IOpenApiAny>().ToList();
-        schema.Properties["model"].Default = new OpenApiString("meta/llama-3.3-70b-instruct");
+        if (schema.Properties.TryGetValue("model", out var modelProp))
+        {
+            modelProp.Enum = models.Select(m => new OpenApiString(m)).Cast<IOpenApiAny>().ToList();
+            modelProp.Default = new OpenApiString("meta/llama-3.3-70b-instruct");
+        }
 
-        schema.Properties["topK"].Default = new OpenApiInteger(2);
+        if (schema.Properties.TryGetValue("topK", out var topKProp))
+            topKProp.Default = new OpenApiInteger(2);
     }
 }

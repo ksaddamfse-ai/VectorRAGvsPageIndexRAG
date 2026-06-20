@@ -2,16 +2,22 @@
 
 ASP.NET Core 10 Web API comparing Vector RAG and Page Index RAG strategies.
 
-## Current: Vector RAG
+## Vector RAG
 
 PDF ingestion → chunking → embedding → Qdrant vector store → query with LLM context.
+
+## PageIndex RAG (Vectorless)
+
+PDF ingestion → LLM builds hierarchical document tree → stored in SQLite → query navigates tree via LLM reasoning.
 
 ### Endpoints
 
 | Method | Path | Description |
 |---|---|---|
-| `POST` | `/api/rag/documents` | Ingest PDF: chunk, embed, store in Qdrant |
-| `POST` | `/api/rag/query` | Ask a question: embed → search → LLM answer |
+| `POST` | `/api/rag/documents` | Vector: ingest PDF, chunk, embed, store in Qdrant |
+| `POST` | `/api/rag/query` | Vector: embed question → search → LLM answer |
+| `POST` | `/api/pageindex/documents` | PageIndex: ingest PDF, build tree via LLM, store in SQLite |
+| `POST` | `/api/pageindex/query` | PageIndex: LLM navigates tree → fetch sections → LLM answer |
 | `POST` | `/api/chat` | Direct LLM chat (no RAG) |
 
 ### Quick Start
@@ -50,28 +56,38 @@ Open Swagger UI at `https://localhost:51095/swagger`.
 }
 ```
 
-### Architecture
+### Vector RAG Architecture
 
 ```
-Ingest:
-  PDF → PdfPig → SK TextChunker → IEmbeddingGenerator → Qdrant
-
-Query:
-  Question → IEmbeddingGenerator → Qdrant Search → IChatClient → Answer
+Ingest:  PDF → PdfPig → SK TextChunker → IEmbeddingGenerator → Qdrant
+Query:   Question → IEmbeddingGenerator → Qdrant Search → IChatClient → Answer
 ```
 
-- Vector store access via [Qdrant.Client](https://www.nuget.org/packages/Qdrant.Client)
-- Embedding & Chat via [Microsoft.Extensions.AI](https://www.nuget.org/packages/Microsoft.Extensions.AI)
-- Chunking via [Semantic Kernel](https://www.nuget.org/packages/Microsoft.SemanticKernel.Core) TextChunker
-- PDF parsing via [PdfPig](https://www.nuget.org/packages/PdfPig)
+- Vector store: [Qdrant.Client](https://www.nuget.org/packages/Qdrant.Client) (gRPC, port 6334)
+- Embedding & Chat: [Microsoft.Extensions.AI](https://www.nuget.org/packages/Microsoft.Extensions.AI)
+- Chunking: [Semantic Kernel](https://www.nuget.org/packages/Microsoft.SemanticKernel.Core) TextChunker
+- PDF: [PdfPig](https://www.nuget.org/packages/PdfPig)
 
-### Provider Switching
+### PageIndex RAG Architecture
 
-| Config Key | Change |
+```
+Ingest:  PDF → PdfPig → LLM tree builder → SQLite (tree_json + node_texts)
+Query:   Q + docId → LLM navigates skeleton → fetch node texts → LLM answer
+```
+
+- Storage: [Microsoft.Data.Sqlite](https://www.nuget.org/packages/Microsoft.Data.Sqlite) (local, no external infra)
+- Tree building: single LLM call per doc creates hierarchical section tree
+- Retrieval: LLM reasons over titles+summaries, fetches only matching leaf texts
+- Provider defaults: NvidiaNim / meta/llama-3.3-70b-instruct
+
+### Configuration
+
+| Section | Purpose |
 |---|---|
-| `ActiveProvider` | Qdrant ↔ AzureAISearch (add connector + NuGet) |
-| `ActiveEmbeddingProvider` | NvidiaNim ↔ Ollama ↔ custom |
-| Provider in `/api/rag/query` | OpenRouter ↔ NvidiaNim ↔ FoundryLocal |
+| `ProviderRegistry` | Chat LLM providers (OpenRouter, NvidiaNim, FoundryLocal) |
+| `EmbeddingRegistry` | Embedding models (NvidiaNim, Ollama), `ActiveEmbeddingProvider` selects active |
+| `VectorStoreRegistry` | Vector DB (Qdrant, AzureAISearch), `ActiveProvider` selects active |
+| `PageIndex` | SQLite path (`DbPath: "pageindex.db"`) |
 
 Vector size is derived from the active embedding model's output at runtime. No config duplication.
 

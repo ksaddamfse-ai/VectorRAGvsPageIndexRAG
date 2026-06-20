@@ -96,6 +96,11 @@ builder.Services.AddSingleton<IDocumentProcessor, DocumentProcessor>();
 builder.Services.AddSingleton<IRagIngestionService, RagIngestionService>();
 builder.Services.AddSingleton<IRagQueryService, RagQueryService>();
 
+// ── PageIndex (Vectorless RAG) services ──
+builder.Services.Configure<PageIndexSettings>(builder.Configuration.GetSection("PageIndex"));
+builder.Services.AddSingleton<DocumentTreeBuilder>();
+builder.Services.AddSingleton<PageIndexService>();
+
 var app = builder.Build();
 
 if (app.Environment.IsDevelopment())

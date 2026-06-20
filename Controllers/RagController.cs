@@ -32,10 +32,10 @@ public class RagController(
             result.Chunks.Select(c => new RagChunkResponse(c.Id, c.Text, c.ChunkIndex)).ToList()));
     }
 
-    [HttpPost("query")]
+    [HttpGet("query")]
     [ProducesResponseType<RagQueryResponse>(StatusCodes.Status200OK)]
     [ProducesResponseType<string>(StatusCodes.Status400BadRequest)]
-    public async Task<IActionResult> Query([FromBody] RagQueryRequest request)
+    public async Task<IActionResult> Query([FromQuery] RagQueryRequest request)
     {
         if (string.IsNullOrWhiteSpace(request.Question))
             return BadRequest("Question is required.");
