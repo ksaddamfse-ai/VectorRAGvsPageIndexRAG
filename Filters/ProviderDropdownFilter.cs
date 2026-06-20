@@ -10,11 +10,13 @@ public class ProviderDropdownFilter(IOptions<Dictionary<string, ProviderRegistry
 {
     public void Apply(OpenApiParameter parameter, ParameterFilterContext context)
     {
-        if (parameter.Name is not ("provider" or "model")) return;
+        if (!string.Equals(parameter.Name, "provider", StringComparison.OrdinalIgnoreCase)
+            && !string.Equals(parameter.Name, "model", StringComparison.OrdinalIgnoreCase))
+            return;
 
         var entry = registry.Value;
 
-        if (parameter.Name == "provider")
+        if (string.Equals(parameter.Name, "provider", StringComparison.OrdinalIgnoreCase))
         {
             var providers = entry.Where(e => e.Value.Enabled).Select(e => e.Key).ToList();
             parameter.Schema.Enum = providers.Select(k => new OpenApiString(k)).Cast<IOpenApiAny>().ToList();

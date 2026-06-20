@@ -26,11 +26,11 @@ public class PageIndexController(PageIndexService pageIndexService) : Controller
         return CreatedAtAction(nameof(Ingest), result);
     }
 
-    [HttpPost("query")]
+    [HttpGet("query")]
     [ProducesResponseType<PageIndexQueryResponse>(StatusCodes.Status200OK)]
     [ProducesResponseType<string>(StatusCodes.Status400BadRequest)]
     [ProducesResponseType<string>(StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> Query([FromBody] PageIndexQueryRequest request)
+    public async Task<IActionResult> Query([FromQuery] PageIndexQueryRequest request)
     {
         if (string.IsNullOrWhiteSpace(request.DocId))
             return BadRequest("docId is required.");
