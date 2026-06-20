@@ -1,6 +1,8 @@
 using Anthropic;
 using Azure.AI.OpenAI;
 using Microsoft.Extensions.AI;
+using Microsoft.Extensions.VectorData;
+using Microsoft.SemanticKernel.Connectors.Qdrant;
 using OpenAI;
 using System.ClientModel;
 using VectorRAGvsPageIndexRAG.Services;
@@ -14,8 +16,11 @@ builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(c =>
 {
     c.ParameterFilter<ProviderDropdownFilter>();
+    c.ParameterFilter<EmbeddingDropdownFilter>();
+    c.SchemaFilter<ProviderModelSchemaFilter>();
 });
 
+// ── Chat providers ──
 foreach (var section in builder.Configuration.GetSection("ProviderRegistry").GetChildren())
 {
     var providerKey = section.Key;
@@ -54,9 +59,61 @@ foreach (var section in builder.Configuration.GetSection("ProviderRegistry").Get
     }
 }
 
+// ── Active embedding generator ──
+var embeddingRegistry = builder.Configuration.GetSection("EmbeddingRegistry");
+var activeEmbeddingKey = embeddingRegistry["ActiveEmbeddingProvider"];
+var activeEmbeddingCfg = embeddingRegistry.GetSection(activeEmbeddingKey!);
+var activeEmbeddingModel = activeEmbeddingCfg.GetSection("Models").Get<List<string>>()?.FirstOrDefault();
+var vectorSize = activeEmbeddingCfg.GetValue<int>("VectorSize");
+
+if (!string.IsNullOrEmpty(activeEmbeddingModel))
+{
+    builder.Services.AddEmbeddingGenerator(sp => activeEmbeddingCfg["Type"] switch
+    {
+        "AzureOpenAI" => new AzureOpenAIClient(
+            new Uri(activeEmbeddingCfg["Endpoint"]!),
+            new ApiKeyCredential(activeEmbeddingCfg["ApiKey"]!))
+            .GetEmbeddingGenerator(activeEmbeddingModel),
+
+        _ => new OpenAIClient(
+            new ApiKeyCredential(activeEmbeddingCfg["ApiKey"] ?? ""),
+            new OpenAIClientOptions { Endpoint = new Uri(activeEmbeddingCfg["BaseUrl"]!) })
+            .GetEmbeddingGenerator(activeEmbeddingModel)
+    });
+
+    builder.Services.Configure<ActiveEmbeddingOptions>(o =>
+    {
+        o.ProviderKey = activeEmbeddingKey!;
+        o.Model = activeEmbeddingModel;
+        o.VectorSize = vectorSize;
+    });
+}
+
+// ── Active vector store ──
+var vsRegistry = builder.Configuration.GetSection("VectorStoreRegistry");
+var activeVs = vsRegistry["ActiveProvider"];
+var activeVsCfg = vsRegistry.GetSection(activeVs!);
+
+switch (activeVs)
+{
+    case "Qdrant":
+        builder.Services.AddQdrantVectorStore(
+            host: activeVsCfg["Host"] ?? "localhost",
+            port: activeVsCfg.GetValue<int>("Port"),
+            vectorSize: vectorSize,
+            distance: activeEmbeddingCfg["Distance"] ?? "Cosine");
+        break;
+}
+
+builder.Services.Configure<VectorStoreRegistryEntry>(
+    vsRegistry.GetSection(activeVs!));
+
+// ── Common services ──
 builder.Services.Configure<Dictionary<string, ProviderRegistryEntry>>(
     builder.Configuration.GetSection("ProviderRegistry"));
 builder.Services.AddSingleton<IChatClientFactory, ChatClientFactory>();
+builder.Services.AddSingleton<RagIngestionService>();
+builder.Services.AddSingleton<RagQueryService>();
 
 var app = builder.Build();
 
