@@ -1,5 +1,4 @@
 using System.Text.Json;
-using System.Text.Json.Serialization;
 using Microsoft.Extensions.AI;
 using VectorRAGvsPageIndexRAG.Models;
 namespace VectorRAGvsPageIndexRAG.Services;
@@ -13,24 +12,6 @@ public class DocumentTreeBuilder(
         PropertyNameCaseInsensitive = true,
         PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
     };
-
-    private sealed class LlmTreeRoot
-    {
-        [JsonPropertyName("title")]
-        public string Title { get; set; } = "";
-
-        [JsonPropertyName("node_id")]
-        public string NodeId { get; set; } = "";
-
-        [JsonPropertyName("summary")]
-        public string Summary { get; set; } = "";
-
-        [JsonPropertyName("total_pages")]
-        public int TotalPages { get; set; }
-
-        [JsonPropertyName("children")]
-        public List<TreeNode> Children { get; set; } = [];
-    }
 
     public async Task<DocumentTree> BuildTreeAsync(string text, string fileName,
         string provider = "NvidiaNim", string model = "meta/llama-3.3-70b-instruct")
@@ -76,21 +57,12 @@ public class DocumentTreeBuilder(
             throw new InvalidOperationException("LLM returned empty tree");
 
         var cleaned = SanitizeJson(content);
-        var root = JsonSerializer.Deserialize<LlmTreeRoot>(cleaned, JsonOptions)
+        var tree = JsonSerializer.Deserialize<DocumentTree>(cleaned, JsonOptions)
             ?? throw new InvalidOperationException("Failed to parse tree JSON");
 
-        var docId = $"pi-{Guid.NewGuid():N}"[..12];
-
-        return new DocumentTree
-        {
-            DocId = docId,
-            FileName = fileName,
-            Title = root.Title,
-            NodeId = root.NodeId,
-            Summary = root.Summary,
-            TotalPages = root.TotalPages,
-            Children = root.Children
-        };
+        tree.DocId = $"pi-{Guid.NewGuid():N}"[..12];
+        tree.FileName = fileName;
+        return tree;
     }
 
     private static string SanitizeJson(string raw)

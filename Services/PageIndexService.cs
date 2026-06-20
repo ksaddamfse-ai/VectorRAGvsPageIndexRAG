@@ -15,49 +15,10 @@ public class PageIndexService(
     ILogger<PageIndexService> logger)
 {
     private readonly string _dbPath = settings.Value.DbPath;
-    private readonly SemaphoreSlim _initLock = new(1, 1);
-    private bool _initialized;
-
-    private async Task EnsureTablesAsync()
-    {
-        if (_initialized) return;
-        await _initLock.WaitAsync();
-        try
-        {
-            if (_initialized) return;
-            using var db = new SqliteConnection($"Data Source={_dbPath}");
-            await db.OpenAsync();
-
-            var cmd = db.CreateCommand();
-            cmd.CommandText = """
-                CREATE TABLE IF NOT EXISTS document_trees (
-                    doc_id TEXT PRIMARY KEY,
-                    file_name TEXT NOT NULL,
-                    tree_json TEXT NOT NULL,
-                    created_at TEXT NOT NULL DEFAULT (datetime('now'))
-                );
-
-                CREATE TABLE IF NOT EXISTS node_texts (
-                    doc_id TEXT NOT NULL,
-                    node_id TEXT NOT NULL,
-                    text TEXT NOT NULL,
-                    PRIMARY KEY (doc_id, node_id)
-                );
-                """;
-            await cmd.ExecuteNonQueryAsync();
-            _initialized = true;
-        }
-        finally
-        {
-            _initLock.Release();
-        }
-    }
 
     public async Task<PageIndexIngestionResponse> IngestAsync(IFormFile file,
         string provider = "NvidiaNim", string model = "meta/llama-3.3-70b-instruct")
     {
-        await EnsureTablesAsync();
-
         using var stream = file.OpenReadStream();
         var text = DocumentProcessor.ExtractText(stream);
 
@@ -67,6 +28,23 @@ public class PageIndexService(
 
         using var db = new SqliteConnection($"Data Source={_dbPath}");
         await db.OpenAsync();
+
+        var initCmd = db.CreateCommand();
+        initCmd.CommandText = """
+            CREATE TABLE IF NOT EXISTS document_trees (
+                doc_id TEXT PRIMARY KEY,
+                file_name TEXT NOT NULL,
+                tree_json TEXT NOT NULL,
+                created_at TEXT NOT NULL DEFAULT (datetime('now'))
+            );
+            CREATE TABLE IF NOT EXISTS node_texts (
+                doc_id TEXT NOT NULL,
+                node_id TEXT NOT NULL,
+                text TEXT NOT NULL,
+                PRIMARY KEY (doc_id, node_id)
+            );
+            """;
+        await initCmd.ExecuteNonQueryAsync();
 
         using var tx = db.BeginTransaction();
 
@@ -114,8 +92,6 @@ public class PageIndexService(
 
     public async Task<PageIndexQueryResponse?> QueryAsync(PageIndexQueryRequest request)
     {
-        await EnsureTablesAsync();
-
         using var db = new SqliteConnection($"Data Source={_dbPath}");
         await db.OpenAsync();
 
@@ -191,15 +167,14 @@ public class PageIndexService(
         return new PageIndexQueryResponse(answerResponse?.Text ?? "No answer generated.", citations);
     }
 
-    private static IEnumerable<(string nodeId, string text)> FlattenNodes(List<TreeNode> nodes, string parentId = "")
+    private static IEnumerable<(string nodeId, string text)> FlattenNodes(List<TreeNode> nodes)
     {
         foreach (var node in nodes)
         {
-            var fullId = string.IsNullOrEmpty(parentId) ? node.NodeId : $"{parentId}.{node.NodeId}";
             if (!string.IsNullOrWhiteSpace(node.Text))
                 yield return (node.NodeId, node.Text);
 
-            foreach (var child in FlattenNodes(node.Children, fullId))
+            foreach (var child in FlattenNodes(node.Children))
                 yield return child;
         }
     }
