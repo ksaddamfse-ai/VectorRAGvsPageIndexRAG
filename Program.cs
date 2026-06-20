@@ -112,6 +112,11 @@ builder.Services.AddSingleton<IChatClientFactory, ChatClientFactory>();
 builder.Services.AddSingleton<RagIngestionService>();
 builder.Services.AddSingleton<RagQueryService>();
 
+// ── PageIndex (Vectorless RAG) services ──
+builder.Services.Configure<PageIndexSettings>(builder.Configuration.GetSection("PageIndex"));
+builder.Services.AddSingleton<DocumentTreeBuilder>();
+builder.Services.AddSingleton<PageIndexService>();
+
 var app = builder.Build();
 
 if (app.Environment.IsDevelopment())
