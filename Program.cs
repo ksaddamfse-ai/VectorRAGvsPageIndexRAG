@@ -4,12 +4,17 @@ using Microsoft.Extensions.AI;
 using OpenAI;
 using System.ClientModel;
 using VectorRAGvsPageIndexRAG.Services;
+using VectorRAGvsPageIndexRAG;
+using VectorRAGvsPageIndexRAG.Settings;
 
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen();
+builder.Services.AddSwaggerGen(c =>
+{
+    c.ParameterFilter<ProviderDropdownFilter>();
+});
 
 foreach (var section in builder.Configuration.GetSection("ProviderRegistry").GetChildren())
 {
@@ -22,7 +27,9 @@ foreach (var section in builder.Configuration.GetSection("ProviderRegistry").Get
 
     foreach (var model in models)
     {
-        if (providerType != "AzureOpenAI" && string.IsNullOrEmpty(section["ApiKey"]))
+        if (providerType != "AzureOpenAI"
+            && string.IsNullOrEmpty(section["ApiKey"])
+            && section["BaseUrl"]?.Contains("localhost") != true)
             continue;
 
         var key = $"{providerKey}__{model}";
@@ -39,7 +46,7 @@ foreach (var section in builder.Configuration.GetSection("ProviderRegistry").Get
                 .AsIChatClient(model),
 
             _ => new OpenAIClient(
-                new ApiKeyCredential(section["ApiKey"]!),
+                new ApiKeyCredential(section["ApiKey"] ?? "not-needed"),
                 new OpenAIClientOptions { Endpoint = new Uri(section["BaseUrl"]!) })
                 .GetChatClient(model)
                 .AsIChatClient()
@@ -47,8 +54,9 @@ foreach (var section in builder.Configuration.GetSection("ProviderRegistry").Get
     }
 }
 
+builder.Services.Configure<Dictionary<string, ProviderRegistryEntry>>(
+    builder.Configuration.GetSection("ProviderRegistry"));
 builder.Services.AddSingleton<IChatClientFactory, ChatClientFactory>();
-builder.Services.AddTransient<MyAiService>();
 
 var app = builder.Build();
 
