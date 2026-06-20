@@ -58,25 +58,24 @@ foreach (var providerSection in builder.Configuration.GetSection("ProviderRegist
 
 // ── Active embedding generator ──
 var providerRegistrySection = builder.Configuration.GetSection("ProviderRegistry");
-var activeEmbeddingProvider = providerRegistrySection["ActiveEmbeddingProvider"];
-var activeEmbeddingProviderSection = providerRegistrySection.GetSection(activeEmbeddingProvider!);
-var activeEmbeddingModel = activeEmbeddingProviderSection.GetSection("EmbeddingModels").Get<List<string>>()?.FirstOrDefault();
+var activeEmbeddingProvider = providerRegistrySection["ActiveEmbeddingProvider"]
+    ?? throw new InvalidOperationException("'ProviderRegistry:ActiveEmbeddingProvider' is not set.");
+var activeEmbeddingModel = providerRegistrySection["ActiveEmbeddingModel"]
+    ?? throw new InvalidOperationException("'ProviderRegistry:ActiveEmbeddingModel' is not set.");
+var activeEmbeddingProviderSection = providerRegistrySection.GetSection(activeEmbeddingProvider);
 
-var activeEmbeddingEnabled = activeEmbeddingProviderSection["Enabled"] != "false";
+builder.Services.AddEmbeddingGenerator(_ => activeEmbeddingProviderSection["Type"] switch
+{
+    "AzureOpenAI" => new AzureOpenAIClient(
+        new Uri(activeEmbeddingProviderSection["Endpoint"]!),
+        new ApiKeyCredential(activeEmbeddingProviderSection["ApiKey"]!))
+        .GetEmbeddingClient(activeEmbeddingModel).AsIEmbeddingGenerator(),
 
-if (!string.IsNullOrEmpty(activeEmbeddingModel) && activeEmbeddingEnabled)
-    builder.Services.AddEmbeddingGenerator(_ => activeEmbeddingProviderSection["Type"] switch
-    {
-        "AzureOpenAI" => new AzureOpenAIClient(
-            new Uri(activeEmbeddingProviderSection["Endpoint"]!),
-            new ApiKeyCredential(activeEmbeddingProviderSection["ApiKey"]!))
-            .GetEmbeddingClient(activeEmbeddingModel).AsIEmbeddingGenerator(),
-
-        _ => new OpenAIClient(
-            new ApiKeyCredential(activeEmbeddingProviderSection["ApiKey"] ?? ""),
-            new OpenAIClientOptions { Endpoint = new Uri(activeEmbeddingProviderSection["BaseUrl"]!) })
-            .GetEmbeddingClient(activeEmbeddingModel).AsIEmbeddingGenerator()
-    });
+    _ => new OpenAIClient(
+        new ApiKeyCredential(activeEmbeddingProviderSection["ApiKey"] ?? ""),
+        new OpenAIClientOptions { Endpoint = new Uri(activeEmbeddingProviderSection["BaseUrl"]!) })
+        .GetEmbeddingClient(activeEmbeddingModel).AsIEmbeddingGenerator()
+});
 
 // ── Active vector store ──
 var vectorStoreRegistrySection = builder.Configuration.GetSection("VectorStoreRegistry");

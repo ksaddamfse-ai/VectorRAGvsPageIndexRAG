@@ -7,5 +7,4 @@ public class ProviderRegistryEntry
     public string? ApiKey { get; init; }
     public string BaseUrl { get; init; } = "";
     public List<string> Models { get; init; } = [];
-    public List<string> EmbeddingModels { get; init; } = [];
 }
