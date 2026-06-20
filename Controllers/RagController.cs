@@ -7,8 +7,7 @@ namespace VectorRAGvsPageIndexRAG;
 [Route("api/rag")]
 public class RagController(
     RagIngestionService ingestionService,
-    RagQueryService queryService,
-    ILogger<RagController> logger) : ControllerBase
+    RagQueryService queryService) : ControllerBase
 {
     [HttpPost("documents")]
     [ProducesResponseType<RagIngestionResult>(StatusCodes.Status201Created)]

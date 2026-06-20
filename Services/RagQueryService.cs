@@ -1,6 +1,7 @@
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Options;
-using Microsoft.Extensions.VectorData;
+using Qdrant.Client;
+using Qdrant.Client.Grpc;
 using VectorRAGvsPageIndexRAG.Settings;
 
 namespace VectorRAGvsPageIndexRAG.Services;
@@ -8,29 +9,29 @@ namespace VectorRAGvsPageIndexRAG.Services;
 public class RagQueryService(
     IChatClientFactory clientFactory,
     IEmbeddingGenerator<string, Embedding<float>> embedder,
-    IVectorStore vectorStore,
-    IOptions<VectorStoreRegistryEntry> vsConfig,
-    ILogger<RagQueryService> logger)
+    QdrantClient qdrant,
+    IOptions<VectorStoreRegistryEntry> vsConfig)
 {
     public async Task<RagQueryResponse> QueryAsync(RagQueryRequest request)
     {
         var queryEmbedding = await embedder.GenerateAsync(request.Question);
-        var collection = vectorStore.GetCollection<string, RagChunk>(
-            vsConfig.Value.DefaultCollectionName);
-        await collection.CreateCollectionIfNotExistsAsync();
+        var vector = queryEmbedding.Vector.ToArray();
 
-        var searchResults = await collection.VectorizedSearchAsync(
-            queryEmbedding[0].Vector,
-            new() { Top = request.TopK });
-
-        var chunks = new List<RagChunkResult>();
-        await foreach (var result in searchResults.Results)
+        await qdrant.CreateCollectionAsync(vsConfig.Value.DefaultCollectionName, new VectorParams
         {
-            chunks.Add(new RagChunkResult(
-                result.Record.Text,
-                result.Record.Source,
-                result.Score ?? 0));
-        }
+            Size = (ulong)vsConfig.Value.VectorSize,
+            Distance = Distance.Cosine
+        });
+
+        var results = await qdrant.SearchAsync(
+            vsConfig.Value.DefaultCollectionName,
+            vector,
+            limit: (ulong)request.TopK);
+
+        var chunks = results.Select(r => new RagChunkResult(
+            r.Payload["text"].StringValue,
+            r.Payload["source"].StringValue,
+            r.Score)).ToList();
 
         if (chunks.Count == 0)
             return new RagQueryResponse("No relevant context found.", []);

@@ -1,14 +1,17 @@
+#pragma warning disable SKEXP0050
+
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Options;
-using Microsoft.Extensions.VectorData;
 using Microsoft.SemanticKernel.Text;
+using Qdrant.Client;
+using Qdrant.Client.Grpc;
 using VectorRAGvsPageIndexRAG.Settings;
 
 namespace VectorRAGvsPageIndexRAG.Services;
 
 public class RagIngestionService(
     IEmbeddingGenerator<string, Embedding<float>> embedder,
-    IVectorStore vectorStore,
+    QdrantClient qdrant,
     IOptions<VectorStoreRegistryEntry> vsConfig,
     ILogger<RagIngestionService> logger)
 {
@@ -28,11 +31,28 @@ public class RagIngestionService(
 
         var embeddings = await embedder.GenerateAsync(chunks.Select(c => c.Text));
         for (int i = 0; i < chunks.Count; i++)
-            chunks[i].Vector = embeddings[i].Vector;
+            chunks[i].Vector = embeddings[i].Vector.ToArray();
 
-        var collection = vectorStore.GetCollection<string, RagChunk>(cfg.DefaultCollectionName);
-        await collection.CreateCollectionIfNotExistsAsync();
-        await collection.UpsertAsync(chunks);
+        var points = chunks.Select(c => new PointStruct
+        {
+            Id = new PointId { Uuid = c.Id },
+            Vectors = c.Vector,
+            Payload =
+            {
+                ["text"] = c.Text,
+                ["source"] = c.Source,
+                ["chunk_index"] = c.ChunkIndex,
+                ["total_chunks"] = c.TotalChunks
+            }
+        }).ToList();
+
+        await qdrant.CreateCollectionAsync(cfg.DefaultCollectionName, new VectorParams
+        {
+            Size = (ulong)cfg.VectorSize,
+            Distance = Distance.Cosine
+        });
+
+        await qdrant.UpsertAsync(cfg.DefaultCollectionName, points);
 
         logger.LogInformation("Ingested {File}: {Count} chunks", fileName, chunks.Count);
         return new RagIngestionResult(fileName, chunks.Count, chunks);

@@ -1,9 +1,8 @@
 using Anthropic;
 using Azure.AI.OpenAI;
 using Microsoft.Extensions.AI;
-using Microsoft.Extensions.VectorData;
-using Microsoft.SemanticKernel.Connectors.Qdrant;
 using OpenAI;
+using Qdrant.Client;
 using System.ClientModel;
 using VectorRAGvsPageIndexRAG.Services;
 using VectorRAGvsPageIndexRAG;
@@ -73,12 +72,14 @@ if (!string.IsNullOrEmpty(activeEmbeddingModel))
         "AzureOpenAI" => new AzureOpenAIClient(
             new Uri(activeEmbeddingCfg["Endpoint"]!),
             new ApiKeyCredential(activeEmbeddingCfg["ApiKey"]!))
-            .GetEmbeddingGenerator(activeEmbeddingModel),
+            .GetEmbeddingClient(activeEmbeddingModel)
+            .AsIEmbeddingGenerator(),
 
         _ => new OpenAIClient(
             new ApiKeyCredential(activeEmbeddingCfg["ApiKey"] ?? ""),
             new OpenAIClientOptions { Endpoint = new Uri(activeEmbeddingCfg["BaseUrl"]!) })
-            .GetEmbeddingGenerator(activeEmbeddingModel)
+            .GetEmbeddingClient(activeEmbeddingModel)
+            .AsIEmbeddingGenerator()
     });
 
     builder.Services.Configure<ActiveEmbeddingOptions>(o =>
@@ -97,16 +98,17 @@ var activeVsCfg = vsRegistry.GetSection(activeVs!);
 switch (activeVs)
 {
     case "Qdrant":
-        builder.Services.AddQdrantVectorStore(
+        builder.Services.AddSingleton(_ => new QdrantClient(
             host: activeVsCfg["Host"] ?? "localhost",
-            port: activeVsCfg.GetValue<int>("Port"),
-            vectorSize: vectorSize,
-            distance: activeEmbeddingCfg["Distance"] ?? "Cosine");
+            port: activeVsCfg.GetValue<int>("Port")));
         break;
 }
 
-builder.Services.Configure<VectorStoreRegistryEntry>(
-    vsRegistry.GetSection(activeVs!));
+builder.Services.Configure<VectorStoreRegistryEntry>(options =>
+{
+    activeVsCfg.Bind(options);
+    options.VectorSize = vectorSize;
+});
 
 // ── Common services ──
 builder.Services.Configure<Dictionary<string, ProviderRegistryEntry>>(

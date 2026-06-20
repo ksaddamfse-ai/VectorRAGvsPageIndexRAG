@@ -1,3 +1,4 @@
+using System.Text;
 using UglyToad.PdfPig;
 
 namespace VectorRAGvsPageIndexRAG.Services;
