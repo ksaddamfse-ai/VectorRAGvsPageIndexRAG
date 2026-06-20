@@ -32,6 +32,12 @@ public class RagIngestionService(
             TotalChunks = paragraphs.Count
         }).ToList();
 
+        if (chunks.Count == 0)
+        {
+            logger.LogWarning("No chunks produced for document {File}", fileName);
+            return new RagIngestionResult(fileName, 0, []);
+        }
+
         var embeddings = await embedder.GenerateAsync(chunks.Select(c => c.Text));
         var actualVectorSize = embeddings[0].Vector.Length;
         for (int i = 0; i < chunks.Count; i++)
@@ -50,20 +56,22 @@ public class RagIngestionService(
             }
         }).ToList();
 
-        try
+        if (points.Count > 0)
         {
-            await qdrant.CreateCollectionAsync(cfg.DefaultCollectionName, new VectorParams
+            try
             {
-                Size = (ulong)actualVectorSize,
-                Distance = Distance.Cosine
-            });
+                await qdrant.CreateCollectionAsync(cfg.DefaultCollectionName, new VectorParams
+                {
+                    Size = (ulong)(chunks[0].Vector?.Length ?? 0),
+                    Distance = Distance.Cosine
+                });
+            }
+            catch (RpcException ex) when (ex.StatusCode == StatusCode.AlreadyExists) { }
+
+            await qdrant.UpsertAsync(cfg.DefaultCollectionName, points);
         }
-        catch (RpcException ex) when (ex.StatusCode == StatusCode.AlreadyExists) { }
 
-        await qdrant.UpsertAsync(cfg.DefaultCollectionName, points);
-
-        logger.LogInformation("Ingested {File}: {Count} chunks (vector size: {Size})",
-            fileName, chunks.Count, actualVectorSize);
+        logger.LogInformation("Ingested {File}: {Count} chunks", fileName, chunks.Count);
         return new RagIngestionResult(fileName, chunks.Count, chunks);
     }
 }
