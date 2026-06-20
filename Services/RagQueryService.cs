@@ -17,12 +17,6 @@ public class RagQueryService(
         var queryEmbedding = await embedder.GenerateAsync(request.Question);
         var vector = queryEmbedding.Vector.ToArray();
 
-        await qdrant.CreateCollectionAsync(vsConfig.Value.DefaultCollectionName, new VectorParams
-        {
-            Size = (ulong)vsConfig.Value.VectorSize,
-            Distance = Distance.Cosine
-        });
-
         var results = await qdrant.SearchAsync(
             vsConfig.Value.DefaultCollectionName,
             vector,

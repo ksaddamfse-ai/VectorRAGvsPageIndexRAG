@@ -1,5 +1,6 @@
 #pragma warning disable SKEXP0050
 
+using Grpc.Core;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Options;
 using Microsoft.SemanticKernel.Text;
@@ -30,6 +31,7 @@ public class RagIngestionService(
         }).ToList();
 
         var embeddings = await embedder.GenerateAsync(chunks.Select(c => c.Text));
+        var actualVectorSize = embeddings[0].Vector.Length;
         for (int i = 0; i < chunks.Count; i++)
             chunks[i].Vector = embeddings[i].Vector.ToArray();
 
@@ -46,15 +48,20 @@ public class RagIngestionService(
             }
         }).ToList();
 
-        await qdrant.CreateCollectionAsync(cfg.DefaultCollectionName, new VectorParams
+        try
         {
-            Size = (ulong)cfg.VectorSize,
-            Distance = Distance.Cosine
-        });
+            await qdrant.CreateCollectionAsync(cfg.DefaultCollectionName, new VectorParams
+            {
+                Size = (ulong)actualVectorSize,
+                Distance = Distance.Cosine
+            });
+        }
+        catch (RpcException ex) when (ex.StatusCode == StatusCode.AlreadyExists) { }
 
         await qdrant.UpsertAsync(cfg.DefaultCollectionName, points);
 
-        logger.LogInformation("Ingested {File}: {Count} chunks", fileName, chunks.Count);
+        logger.LogInformation("Ingested {File}: {Count} chunks (vector size: {Size})",
+            fileName, chunks.Count, actualVectorSize);
         return new RagIngestionResult(fileName, chunks.Count, chunks);
     }
 }

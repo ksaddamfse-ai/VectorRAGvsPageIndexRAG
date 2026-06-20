@@ -63,7 +63,6 @@ var embeddingRegistry = builder.Configuration.GetSection("EmbeddingRegistry");
 var activeEmbeddingKey = embeddingRegistry["ActiveEmbeddingProvider"];
 var activeEmbeddingCfg = embeddingRegistry.GetSection(activeEmbeddingKey!);
 var activeEmbeddingModel = activeEmbeddingCfg.GetSection("Models").Get<List<string>>()?.FirstOrDefault();
-var vectorSize = activeEmbeddingCfg.GetValue<int>("VectorSize");
 
 if (!string.IsNullOrEmpty(activeEmbeddingModel))
 {
@@ -86,7 +85,6 @@ if (!string.IsNullOrEmpty(activeEmbeddingModel))
     {
         o.ProviderKey = activeEmbeddingKey!;
         o.Model = activeEmbeddingModel;
-        o.VectorSize = vectorSize;
     });
 }
 
@@ -105,10 +103,7 @@ switch (activeVs)
 }
 
 builder.Services.Configure<VectorStoreRegistryEntry>(options =>
-{
-    activeVsCfg.Bind(options);
-    options.VectorSize = vectorSize;
-});
+    activeVsCfg.Bind(options));
 
 // ── Common services ──
 builder.Services.Configure<Dictionary<string, ProviderRegistryEntry>>(
