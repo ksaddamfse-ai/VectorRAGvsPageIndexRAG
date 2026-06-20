@@ -5,6 +5,7 @@ using OpenAI;
 using Qdrant.Client;
 using System.ClientModel;
 using VectorRAGvsPageIndexRAG.Services;
+using VectorRAGvsPageIndexRAG.Services.Interfaces;
 using VectorRAGvsPageIndexRAG;
 using VectorRAGvsPageIndexRAG.Settings;
 
@@ -105,12 +106,13 @@ switch (activeVs)
 builder.Services.Configure<VectorStoreRegistryEntry>(options =>
     activeVsCfg.Bind(options));
 
-// ── Common services ──
+// ── Application services ──
 builder.Services.Configure<Dictionary<string, ProviderRegistryEntry>>(
     builder.Configuration.GetSection("ProviderRegistry"));
 builder.Services.AddSingleton<IChatClientFactory, ChatClientFactory>();
-builder.Services.AddSingleton<RagIngestionService>();
-builder.Services.AddSingleton<RagQueryService>();
+builder.Services.AddSingleton<IDocumentProcessor, DocumentProcessor>();
+builder.Services.AddSingleton<IRagIngestionService, RagIngestionService>();
+builder.Services.AddSingleton<IRagQueryService, RagQueryService>();
 
 var app = builder.Build();
 

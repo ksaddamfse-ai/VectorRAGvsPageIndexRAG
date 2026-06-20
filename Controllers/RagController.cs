@@ -1,13 +1,15 @@
 using Microsoft.AspNetCore.Mvc;
-using VectorRAGvsPageIndexRAG.Services;
+using VectorRAGvsPageIndexRAG.DTOs;
+using VectorRAGvsPageIndexRAG.Services.Interfaces;
 
 namespace VectorRAGvsPageIndexRAG;
 
 [ApiController]
 [Route("api/rag")]
 public class RagController(
-    RagIngestionService ingestionService,
-    RagQueryService queryService) : ControllerBase
+    IDocumentProcessor documentProcessor,
+    IRagIngestionService ingestionService,
+    IRagQueryService queryService) : ControllerBase
 {
     [HttpPost("documents")]
     [ProducesResponseType<RagIngestionResponse>(StatusCodes.Status201Created)]
@@ -21,7 +23,7 @@ public class RagController(
             return BadRequest("Only PDF files are supported.");
 
         using var stream = file.OpenReadStream();
-        var text = DocumentProcessor.ExtractText(stream);
+        var text = documentProcessor.ExtractText(stream);
         var result = await ingestionService.IngestAsync(text, file.FileName);
 
         return CreatedAtAction(nameof(Ingest), new RagIngestionResponse(

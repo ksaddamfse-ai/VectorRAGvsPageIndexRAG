@@ -6,6 +6,8 @@ using Microsoft.Extensions.Options;
 using Microsoft.SemanticKernel.Text;
 using Qdrant.Client;
 using Qdrant.Client.Grpc;
+using VectorRAGvsPageIndexRAG.Models;
+using VectorRAGvsPageIndexRAG.Services.Interfaces;
 using VectorRAGvsPageIndexRAG.Settings;
 
 namespace VectorRAGvsPageIndexRAG.Services;
@@ -14,7 +16,7 @@ public class RagIngestionService(
     IEmbeddingGenerator<string, Embedding<float>> embedder,
     QdrantClient qdrant,
     IOptions<VectorStoreRegistryEntry> vsConfig,
-    ILogger<RagIngestionService> logger)
+    ILogger<RagIngestionService> logger) : IRagIngestionService
 {
     public async Task<RagIngestionResult> IngestAsync(string text, string fileName)
     {
@@ -65,7 +67,3 @@ public class RagIngestionService(
         return new RagIngestionResult(fileName, chunks.Count, chunks);
     }
 }
-
-public record RagIngestionResult(string FileName, int ChunkCount, List<RagChunk> Chunks);
-public record RagIngestionResponse(string FileName, int ChunkCount, List<RagChunkResponse> Chunks);
-public record RagChunkResponse(string Id, string Text, int ChunkIndex);

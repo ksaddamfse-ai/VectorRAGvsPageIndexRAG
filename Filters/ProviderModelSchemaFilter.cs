@@ -2,7 +2,7 @@ using Microsoft.Extensions.Options;
 using Microsoft.OpenApi.Any;
 using Microsoft.OpenApi.Models;
 using Swashbuckle.AspNetCore.SwaggerGen;
-using VectorRAGvsPageIndexRAG.Services;
+using VectorRAGvsPageIndexRAG.DTOs;
 using VectorRAGvsPageIndexRAG.Settings;
 
 namespace VectorRAGvsPageIndexRAG;

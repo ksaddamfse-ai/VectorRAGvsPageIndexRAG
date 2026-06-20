@@ -1,4 +1,4 @@
-namespace VectorRAGvsPageIndexRAG.Settings;
+namespace VectorRAGvsPageIndexRAG.Models;
 
 public class RagChunk
 {
