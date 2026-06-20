@@ -24,9 +24,10 @@ foreach (var providerSection in builder.Configuration.GetSection("ProviderRegist
 {
     var providerKey = providerSection.Key;
     var providerType = providerSection["Type"] ?? "OpenAI";
+    var providerEnabled = providerSection["Enabled"] != "false";
     var chatModels = providerSection.GetSection("Models").Get<List<string>>() ?? [];
 
-    if (chatModels.Count == 0) continue;
+    if (!providerEnabled || chatModels.Count == 0) continue;
 
     foreach (var chatModel in chatModels)
     {
@@ -61,7 +62,9 @@ var activeEmbeddingProvider = providerRegistrySection["ActiveEmbeddingProvider"]
 var activeEmbeddingProviderSection = providerRegistrySection.GetSection(activeEmbeddingProvider!);
 var activeEmbeddingModel = activeEmbeddingProviderSection.GetSection("EmbeddingModels").Get<List<string>>()?.FirstOrDefault();
 
-if (!string.IsNullOrEmpty(activeEmbeddingModel))
+var activeEmbeddingEnabled = activeEmbeddingProviderSection["Enabled"] != "false";
+
+if (!string.IsNullOrEmpty(activeEmbeddingModel) && activeEmbeddingEnabled)
     builder.Services.AddEmbeddingGenerator(_ => activeEmbeddingProviderSection["Type"] switch
     {
         "AzureOpenAI" => new AzureOpenAIClient(
