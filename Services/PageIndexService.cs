@@ -1,11 +1,8 @@
 using System.Text.Json;
-using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.AI;
-using Microsoft.Extensions.Options;
 using VectorRAGvsPageIndexRAG.DTOs;
 using VectorRAGvsPageIndexRAG.Models;
 using VectorRAGvsPageIndexRAG.Services.Interfaces;
-using VectorRAGvsPageIndexRAG.Settings;
 
 namespace VectorRAGvsPageIndexRAG.Services;
 
@@ -13,10 +10,9 @@ public class PageIndexService(
     DocumentTreeBuilder treeBuilder,
     IChatClientFactory clientFactory,
     IDocumentProcessor documentProcessor,
-    IOptions<PageIndexSettings> settings,
+    IPageIndexDatabase database,
     ILogger<PageIndexService> logger) : IPageIndexService
 {
-    private readonly string _dbPath = settings.Value.DbPath;
 
     public async Task<PageIndexIngestionResponse> IngestAsync(IFormFile file,
         string provider = "NvidiaNim", string model = "meta/llama-3.3-70b-instruct")
@@ -28,62 +24,9 @@ public class PageIndexService(
 
         var treeJson = JsonSerializer.Serialize(tree);
 
-        using var db = new SqliteConnection($"Data Source={_dbPath}");
-        await db.OpenAsync();
-
-        var initCmd = db.CreateCommand();
-        initCmd.CommandText = """
-            CREATE TABLE IF NOT EXISTS document_trees (
-                doc_id TEXT PRIMARY KEY,
-                file_name TEXT NOT NULL,
-                tree_json TEXT NOT NULL,
-                created_at TEXT NOT NULL DEFAULT (datetime('now'))
-            );
-            CREATE TABLE IF NOT EXISTS node_texts (
-                doc_id TEXT NOT NULL,
-                node_id TEXT NOT NULL,
-                text TEXT NOT NULL,
-                PRIMARY KEY (doc_id, node_id)
-            );
-            """;
-        await initCmd.ExecuteNonQueryAsync();
-
-        using var tx = db.BeginTransaction();
-
-        var insertTree = db.CreateCommand();
-        insertTree.CommandText = """
-            INSERT INTO document_trees (doc_id, file_name, tree_json)
-            VALUES (@id, @name, @json)
-            """;
-        insertTree.Parameters.AddWithValue("@id", tree.DocId);
-        insertTree.Parameters.AddWithValue("@name", tree.FileName);
-        insertTree.Parameters.AddWithValue("@json", treeJson);
-        await insertTree.ExecuteNonQueryAsync();
-
-        var insertText = db.CreateCommand();
-        insertText.CommandText = """
-            INSERT OR IGNORE INTO node_texts (doc_id, node_id, text)
-            VALUES (@docId, @nodeId, @text)
-            """;
-        var docIdParam = insertText.CreateParameter();
-        docIdParam.ParameterName = "@docId";
-        var nodeIdParam = insertText.CreateParameter();
-        nodeIdParam.ParameterName = "@nodeId";
-        var textParam = insertText.CreateParameter();
-        textParam.ParameterName = "@text";
-        insertText.Parameters.Add(docIdParam);
-        insertText.Parameters.Add(nodeIdParam);
-        insertText.Parameters.Add(textParam);
-
-        foreach (var (nodeId, nodeText) in FlattenNodes(tree.Children))
-        {
-            docIdParam.Value = tree.DocId;
-            nodeIdParam.Value = nodeId;
-            textParam.Value = nodeText;
-            await insertText.ExecuteNonQueryAsync();
-        }
-
-        tx.Commit();
+        await database.InitializeAsync();
+        await database.InsertDocumentTreeAsync(tree, treeJson);
+        await database.InsertNodeTextsAsync(tree.DocId, FlattenNodes(tree.Children));
 
         logger.LogInformation("PageIndex ingested {File}: {DocId} ({Nodes} nodes)",
             file.FileName, tree.DocId, tree.Children.Count);
@@ -94,13 +37,7 @@ public class PageIndexService(
 
     public async Task<PageIndexQueryResponse?> QueryAsync(PageIndexQueryRequest request)
     {
-        using var db = new SqliteConnection($"Data Source={_dbPath}");
-        await db.OpenAsync();
-
-        var cmd = db.CreateCommand();
-        cmd.CommandText = "SELECT tree_json FROM document_trees WHERE doc_id = @id";
-        cmd.Parameters.AddWithValue("@id", request.DocId);
-        var json = await cmd.ExecuteScalarAsync() as string;
+        var json = await database.GetDocumentTreeJsonAsync(request.DocId);
 
         if (json is null)
             return null;
@@ -134,17 +71,7 @@ public class PageIndexService(
         if (nodeIds.Count == 0)
             return new PageIndexQueryResponse("No relevant sections found.", []);
 
-        var selectText = db.CreateCommand();
-        var placeholders = string.Join(",", nodeIds.Select((_, i) => $"@id{i}"));
-        selectText.CommandText = $"SELECT node_id, text FROM node_texts WHERE doc_id = @docId AND node_id IN ({placeholders})";
-        selectText.Parameters.AddWithValue("@docId", request.DocId);
-        for (int i = 0; i < nodeIds.Count; i++)
-            selectText.Parameters.AddWithValue($"@id{i}", nodeIds[i]);
-
-        var selectedTexts = new Dictionary<string, string>();
-        using var reader = await selectText.ExecuteReaderAsync();
-        while (await reader.ReadAsync())
-            selectedTexts[reader.GetString(0)] = reader.GetString(1);
+        var selectedTexts = await database.GetNodeTextsAsync(request.DocId, nodeIds);
 
         if (selectedTexts.Count == 0)
             return new PageIndexQueryResponse("No relevant sections found.", []);

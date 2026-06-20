@@ -99,6 +99,7 @@ builder.Services.AddSingleton<IRagQueryService, RagQueryService>();
 // ── PageIndex (Vectorless RAG) services ──
 builder.Services.Configure<PageIndexSettings>(builder.Configuration.GetSection("PageIndex"));
 builder.Services.AddSingleton<DocumentTreeBuilder>();
+builder.Services.AddSingleton<IPageIndexDatabase, SqlitePageIndexDatabase>();
 builder.Services.AddSingleton<IPageIndexService, PageIndexService>();
 
 var app = builder.Build();
