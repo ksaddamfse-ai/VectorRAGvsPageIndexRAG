@@ -10,7 +10,7 @@ public class RagController(
     RagQueryService queryService) : ControllerBase
 {
     [HttpPost("documents")]
-    [ProducesResponseType<RagIngestionResult>(StatusCodes.Status201Created)]
+    [ProducesResponseType<RagIngestionResponse>(StatusCodes.Status201Created)]
     [ProducesResponseType<string>(StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> Ingest(IFormFile file)
     {
@@ -24,7 +24,10 @@ public class RagController(
         var text = DocumentProcessor.ExtractText(stream);
         var result = await ingestionService.IngestAsync(text, file.FileName);
 
-        return CreatedAtAction(nameof(Ingest), result);
+        return CreatedAtAction(nameof(Ingest), new RagIngestionResponse(
+            result.FileName,
+            result.ChunkCount,
+            result.Chunks.Select(c => new RagChunkResponse(c.Id, c.Text, c.ChunkIndex)).ToList()));
     }
 
     [HttpPost("query")]

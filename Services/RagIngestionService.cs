@@ -67,3 +67,5 @@ public class RagIngestionService(
 }
 
 public record RagIngestionResult(string FileName, int ChunkCount, List<RagChunk> Chunks);
+public record RagIngestionResponse(string FileName, int ChunkCount, List<RagChunkResponse> Chunks);
+public record RagChunkResponse(string Id, string Text, int ChunkIndex);
