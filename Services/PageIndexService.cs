@@ -14,7 +14,7 @@ public class PageIndexService(
     IChatClientFactory clientFactory,
     IDocumentProcessor documentProcessor,
     IOptions<PageIndexSettings> settings,
-    ILogger<PageIndexService> logger)
+    ILogger<PageIndexService> logger) : IPageIndexService
 {
     private readonly string _dbPath = settings.Value.DbPath;
 

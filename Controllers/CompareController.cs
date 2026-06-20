@@ -1,14 +1,15 @@
 using Microsoft.AspNetCore.Mvc;
 using VectorRAGvsPageIndexRAG.DTOs;
 using VectorRAGvsPageIndexRAG.Services;
+using VectorRAGvsPageIndexRAG.Services.Interfaces;
 
 namespace VectorRAGvsPageIndexRAG;
 
 [ApiController]
 [Route("api/compare")]
 public class CompareController(
-    RagQueryService ragQueryService,
-    PageIndexService pageIndexService) : ControllerBase
+    IRagQueryService ragQueryService,
+    IPageIndexService pageIndexService) : ControllerBase
 {
     [HttpGet("query")]
     [ProducesResponseType<CompareQueryResponse>(StatusCodes.Status200OK)]
