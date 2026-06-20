@@ -112,7 +112,7 @@ public class PageIndexService(
             tree.DocId, tree.FileName, "completed", tree.TotalPages, treeJson);
     }
 
-    public async Task<PageIndexQueryResponse> QueryAsync(PageIndexQueryRequest request)
+    public async Task<PageIndexQueryResponse?> QueryAsync(PageIndexQueryRequest request)
     {
         await EnsureTablesAsync();
 
@@ -125,7 +125,7 @@ public class PageIndexService(
         var json = await cmd.ExecuteScalarAsync() as string;
 
         if (json is null)
-            return new PageIndexQueryResponse("Document not found.", []);
+            return null;
 
         var tree = JsonSerializer.Deserialize<DocumentTree>(json)!;
 

@@ -40,7 +40,7 @@ public class PageIndexController(PageIndexService pageIndexService) : Controller
 
         var result = await pageIndexService.QueryAsync(request);
 
-        if (result.Citations.Count == 0 && result.Answer == "Document not found.")
+        if (result is null)
             return NotFound("Document not found.");
 
         return Ok(result);
