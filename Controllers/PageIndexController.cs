@@ -1,6 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
 using VectorRAGvsPageIndexRAG.DTOs;
-using VectorRAGvsPageIndexRAG.Services;
 using VectorRAGvsPageIndexRAG.Services.Interfaces;
 
 namespace VectorRAGvsPageIndexRAG;

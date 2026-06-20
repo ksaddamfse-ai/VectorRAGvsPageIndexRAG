@@ -1,4 +1,5 @@
 using Microsoft.Extensions.AI;
+using VectorRAGvsPageIndexRAG.Services.Interfaces;
 
 namespace VectorRAGvsPageIndexRAG.Services;
 

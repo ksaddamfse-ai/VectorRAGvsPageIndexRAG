@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Microsoft.Extensions.AI;
 using VectorRAGvsPageIndexRAG.Models;
+using VectorRAGvsPageIndexRAG.Services.Interfaces;
 namespace VectorRAGvsPageIndexRAG.Services;
 
 public class DocumentTreeBuilder(

@@ -1,7 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Options;
-using VectorRAGvsPageIndexRAG.Services;
+using VectorRAGvsPageIndexRAG.Services.Interfaces;
 using VectorRAGvsPageIndexRAG.Settings;
 
 namespace VectorRAGvsPageIndexRAG;

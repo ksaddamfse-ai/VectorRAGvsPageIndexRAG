@@ -1,5 +1,6 @@
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.DependencyInjection;
+using VectorRAGvsPageIndexRAG.Services.Interfaces;
 
 namespace VectorRAGvsPageIndexRAG.Services;
 
