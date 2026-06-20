@@ -19,11 +19,11 @@ public class ProviderModelSchemaFilter(
 
         schema.Properties["provider"].Enum =
             providers.Select(p => new OpenApiString(p)).Cast<IOpenApiAny>().ToList();
-        schema.Properties["provider"].Default = new OpenApiString("OpenRouter");
+        schema.Properties["provider"].Default = new OpenApiString("NvidiaNim");
 
         schema.Properties["model"].Enum =
             models.Select(m => new OpenApiString(m)).Cast<IOpenApiAny>().ToList();
-        schema.Properties["model"].Default = new OpenApiString("openrouter/free");
+        schema.Properties["model"].Default = new OpenApiString("meta/llama-3.3-70b-instruct");
 
         schema.Properties["topK"].Default = new OpenApiInteger(2);
     }
