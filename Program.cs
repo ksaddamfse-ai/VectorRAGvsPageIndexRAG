@@ -57,12 +57,12 @@ foreach (var providerSection in builder.Configuration.GetSection("ProviderRegist
 }
 
 // ── Active embedding generator ──
-var providerRegistrySection = builder.Configuration.GetSection("ProviderRegistry");
-var activeEmbeddingProvider = providerRegistrySection["ActiveEmbeddingProvider"]
-    ?? throw new InvalidOperationException("'ProviderRegistry:ActiveEmbeddingProvider' is not set.");
-var activeEmbeddingModel = providerRegistrySection["ActiveEmbeddingModel"]
-    ?? throw new InvalidOperationException("'ProviderRegistry:ActiveEmbeddingModel' is not set.");
-var activeEmbeddingProviderSection = providerRegistrySection.GetSection(activeEmbeddingProvider);
+var embeddingRegistrySection = builder.Configuration.GetSection("EmbeddingRegistry");
+var activeEmbeddingProvider = embeddingRegistrySection["ActiveEmbeddingProvider"]
+    ?? throw new InvalidOperationException("'EmbeddingRegistry:ActiveEmbeddingProvider' is not set.");
+var activeEmbeddingProviderSection = embeddingRegistrySection.GetSection(activeEmbeddingProvider);
+var activeEmbeddingModel = activeEmbeddingProviderSection["Model"]
+    ?? throw new InvalidOperationException($"'EmbeddingRegistry:{activeEmbeddingProvider}:Model' is not set.");
 
 builder.Services.AddEmbeddingGenerator(_ => activeEmbeddingProviderSection["Type"] switch
 {
