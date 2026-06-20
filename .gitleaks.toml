@@ -1,0 +1,18 @@
+title = "VectorRAGvsPageIndexRAG gitleaks config"
+
+[extend]
+useDefault = true
+
+[[rules]]
+id = "dotnet-user-secrets"
+description = "dotnet user-secrets commands in scripts"
+regex = '''dotnet\s+user-secrets\s+set\s+"[^"]+"\s+"[^"]+"'''
+tags = ["dotnet", "secrets"]
+
+[allowlist]
+description = "Allowlisted files and paths"
+paths = [
+    # Allow sample/default configs with empty API keys
+    '''appsettings\.json''',
+    '''appsettings\.Development\.json''',
+]
