@@ -16,95 +16,75 @@ builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(c =>
 {
     c.ParameterFilter<ProviderDropdownFilter>();
-    c.ParameterFilter<EmbeddingDropdownFilter>();
     c.SchemaFilter<ProviderModelSchemaFilter>();
 });
 
 // ── Chat providers ──
-foreach (var section in builder.Configuration.GetSection("ProviderRegistry").GetChildren())
+foreach (var providerSection in builder.Configuration.GetSection("ProviderRegistry").GetChildren())
 {
-    var providerKey = section.Key;
-    var providerType = section["Type"] ?? "OpenAI";
-    var models = section.GetSection("Models").Get<List<string>>() ?? [];
+    var providerKey = providerSection.Key;
+    var providerType = providerSection["Type"] ?? "OpenAI";
+    var chatModels = providerSection.GetSection("Models").Get<List<string>>() ?? [];
 
-    if (models.Count == 0)
-        continue;
+    if (chatModels.Count == 0) continue;
 
-    foreach (var model in models)
+    foreach (var chatModel in chatModels)
     {
         if (providerType != "AzureOpenAI"
-            && string.IsNullOrEmpty(section["ApiKey"])
-            && section["BaseUrl"]?.Contains("localhost") != true)
+            && string.IsNullOrEmpty(providerSection["ApiKey"])
+            && providerSection["BaseUrl"]?.Contains("localhost") != true)
             continue;
 
-        var key = $"{providerKey}__{model}";
+        var serviceKey = $"{providerKey}__{chatModel}";
 
-        builder.Services.AddKeyedChatClient(key, _ => providerType switch
+        builder.Services.AddKeyedChatClient(serviceKey, _ => providerType switch
         {
             "AzureOpenAI" => new AzureOpenAIClient(
-                new Uri(section["Endpoint"]!),
-                new ApiKeyCredential(section["ApiKey"]!))
-                .GetChatClient(model)
-                .AsIChatClient(),
+                new Uri(providerSection["Endpoint"]!),
+                new ApiKeyCredential(providerSection["ApiKey"]!))
+                .GetChatClient(chatModel).AsIChatClient(),
 
-            "Anthropic" => new AnthropicClient { ApiKey = section["ApiKey"]! }
-                .AsIChatClient(model),
+            "Anthropic" => new AnthropicClient { ApiKey = providerSection["ApiKey"]! }
+                .AsIChatClient(chatModel),
 
             _ => new OpenAIClient(
-                new ApiKeyCredential(section["ApiKey"] ?? "not-needed"),
-                new OpenAIClientOptions { Endpoint = new Uri(section["BaseUrl"]!) })
-                .GetChatClient(model)
-                .AsIChatClient()
+                new ApiKeyCredential(providerSection["ApiKey"] ?? "not-needed"),
+                new OpenAIClientOptions { Endpoint = new Uri(providerSection["BaseUrl"]!) })
+                .GetChatClient(chatModel).AsIChatClient()
         });
     }
 }
 
 // ── Active embedding generator ──
-var embeddingRegistry = builder.Configuration.GetSection("EmbeddingRegistry");
-var activeEmbeddingKey = embeddingRegistry["ActiveEmbeddingProvider"];
-var activeEmbeddingCfg = embeddingRegistry.GetSection(activeEmbeddingKey!);
-var activeEmbeddingModel = activeEmbeddingCfg.GetSection("Models").Get<List<string>>()?.FirstOrDefault();
+var providerRegistrySection = builder.Configuration.GetSection("ProviderRegistry");
+var activeEmbeddingProvider = providerRegistrySection["ActiveEmbeddingProvider"];
+var activeEmbeddingProviderSection = providerRegistrySection.GetSection(activeEmbeddingProvider!);
+var activeEmbeddingModel = activeEmbeddingProviderSection.GetSection("EmbeddingModels").Get<List<string>>()?.FirstOrDefault();
 
 if (!string.IsNullOrEmpty(activeEmbeddingModel))
-{
-    builder.Services.AddEmbeddingGenerator(sp => activeEmbeddingCfg["Type"] switch
+    builder.Services.AddEmbeddingGenerator(_ => activeEmbeddingProviderSection["Type"] switch
     {
         "AzureOpenAI" => new AzureOpenAIClient(
-            new Uri(activeEmbeddingCfg["Endpoint"]!),
-            new ApiKeyCredential(activeEmbeddingCfg["ApiKey"]!))
-            .GetEmbeddingClient(activeEmbeddingModel)
-            .AsIEmbeddingGenerator(),
+            new Uri(activeEmbeddingProviderSection["Endpoint"]!),
+            new ApiKeyCredential(activeEmbeddingProviderSection["ApiKey"]!))
+            .GetEmbeddingClient(activeEmbeddingModel).AsIEmbeddingGenerator(),
 
         _ => new OpenAIClient(
-            new ApiKeyCredential(activeEmbeddingCfg["ApiKey"] ?? ""),
-            new OpenAIClientOptions { Endpoint = new Uri(activeEmbeddingCfg["BaseUrl"]!) })
-            .GetEmbeddingClient(activeEmbeddingModel)
-            .AsIEmbeddingGenerator()
+            new ApiKeyCredential(activeEmbeddingProviderSection["ApiKey"] ?? ""),
+            new OpenAIClientOptions { Endpoint = new Uri(activeEmbeddingProviderSection["BaseUrl"]!) })
+            .GetEmbeddingClient(activeEmbeddingModel).AsIEmbeddingGenerator()
     });
-
-    builder.Services.Configure<ActiveEmbeddingOptions>(o =>
-    {
-        o.ProviderKey = activeEmbeddingKey!;
-        o.Model = activeEmbeddingModel;
-    });
-}
 
 // ── Active vector store ──
-var vsRegistry = builder.Configuration.GetSection("VectorStoreRegistry");
-var activeVs = vsRegistry["ActiveProvider"];
-var activeVsCfg = vsRegistry.GetSection(activeVs!);
+var vectorStoreRegistrySection = builder.Configuration.GetSection("VectorStoreRegistry");
+var activeVectorStoreProvider = vectorStoreRegistrySection["ActiveProvider"];
+var activeVectorStoreSection = vectorStoreRegistrySection.GetSection(activeVectorStoreProvider!);
 
-switch (activeVs)
-{
-    case "Qdrant":
-        builder.Services.AddSingleton(_ => new QdrantClient(
-            host: activeVsCfg["Host"] ?? "localhost",
-            port: activeVsCfg.GetValue<int>("Port")));
-        break;
-}
+builder.Services.AddSingleton(_ => new QdrantClient(
+    host: activeVectorStoreSection["Host"] ?? "localhost",
+    port: activeVectorStoreSection.GetValue<int>("Port")));
 
-builder.Services.Configure<VectorStoreRegistryEntry>(options =>
-    activeVsCfg.Bind(options));
+builder.Services.Configure<VectorStoreRegistryEntry>(options => activeVectorStoreSection.Bind(options));
 
 // ── Application services ──
 builder.Services.Configure<Dictionary<string, ProviderRegistryEntry>>(

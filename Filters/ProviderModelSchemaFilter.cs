@@ -24,5 +24,7 @@ public class ProviderModelSchemaFilter(
         schema.Properties["model"].Enum =
             models.Select(m => new OpenApiString(m)).Cast<IOpenApiAny>().ToList();
         schema.Properties["model"].Default = new OpenApiString("openrouter/free");
+
+        schema.Properties["topK"].Default = new OpenApiInteger(2);
     }
 }
