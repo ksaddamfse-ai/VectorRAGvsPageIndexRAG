@@ -8,6 +8,7 @@ public record CompareQueryResponse(
 
 public record RagResult(
     string Answer,
+    string CollectionName,
     List<RagChunkResult> Chunks);
 
 public record PageIndexResult(

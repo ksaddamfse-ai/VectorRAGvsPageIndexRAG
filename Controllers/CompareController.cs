@@ -20,7 +20,7 @@ public class CompareController(
         if (string.IsNullOrWhiteSpace(request.DocId))
             return BadRequest("docId is required.");
 
-        var ragReq = new RagQueryRequest(request.Question, request.Provider, request.Model, request.TopK);
+        var ragReq = new RagQueryRequest(request.Question, request.Provider, request.Model, request.TopK, request.CollectionName);
         var piReq = new PageIndexQueryRequest(request.DocId, request.Question, request.Provider, request.Model);
 
         var ragTask = ragQueryService.QueryAsync(ragReq);
@@ -31,8 +31,9 @@ public class CompareController(
         var ragResult = ragTask.Result;
         var piResult = piTask.Result;
 
+        var collName = string.IsNullOrWhiteSpace(request.CollectionName) ? "documents" : request.CollectionName;
         return Ok(new CompareQueryResponse(
-            new RagResult(ragResult.Answer, ragResult.Chunks),
+            new RagResult(ragResult.Answer, collName, ragResult.Chunks),
             new PageIndexResult(
                 piResult?.Answer ?? "Document not found.",
                 piResult?.Citations ?? [])));

@@ -5,4 +5,5 @@ public record CompareQueryRequest(
     string Question,
     string Provider,
     string Model,
-    int TopK);
+    int TopK,
+    string CollectionName = "");
