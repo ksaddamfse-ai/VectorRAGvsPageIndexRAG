@@ -45,7 +45,7 @@ public class RagIngestionService(
         {
             Properties = new List<VectorStoreProperty>
             {
-                new VectorStoreKeyProperty("Key", typeof(string)),
+                new VectorStoreKeyProperty("Key", typeof(Guid)),
                 new VectorStoreDataProperty("Text", typeof(string)),
                 new VectorStoreDataProperty("Source", typeof(string)),
                 new VectorStoreDataProperty("ChunkIndex", typeof(int)),

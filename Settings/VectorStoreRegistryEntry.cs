@@ -7,7 +7,7 @@ public class VectorStoreRegistryEntry
     public int ChunkSize { get; set; } = 512;
     public int ChunkOverlap { get; set; } = 51;
     public string? Host { get; set; }
-    public int Port { get; set; } = 6333;
+    public int Port { get; set; } = 6334;
     public string? Endpoint { get; set; }
     public string? ApiKey { get; set; }
 }
