@@ -28,8 +28,10 @@ public class SqlitePageIndexDatabase : IPageIndexDatabase, IDisposable
                 doc_id TEXT PRIMARY KEY,
                 file_name TEXT NOT NULL,
                 tree_json TEXT NOT NULL,
+                group_name TEXT NOT NULL DEFAULT '',
                 created_at TEXT NOT NULL DEFAULT (datetime('now'))
             );
+            CREATE INDEX IF NOT EXISTS idx_group_name ON document_trees(group_name);
             CREATE TABLE IF NOT EXISTS node_texts (
                 doc_id TEXT NOT NULL,
                 node_id TEXT NOT NULL,
@@ -46,12 +48,13 @@ public class SqlitePageIndexDatabase : IPageIndexDatabase, IDisposable
 
         var insertTree = _db.CreateCommand();
         insertTree.CommandText = """
-            INSERT INTO document_trees (doc_id, file_name, tree_json)
-            VALUES ($id, $name, $json)
+            INSERT INTO document_trees (doc_id, file_name, tree_json, group_name)
+            VALUES ($id, $name, $json, $group)
             """;
         insertTree.Parameters.AddWithValue("$id", tree.DocId);
         insertTree.Parameters.AddWithValue("$name", tree.FileName);
         insertTree.Parameters.AddWithValue("$json", treeJson);
+        insertTree.Parameters.AddWithValue("$group", tree.GroupName);
         await insertTree.ExecuteNonQueryAsync();
 
         tx.Commit();
@@ -108,6 +111,19 @@ public class SqlitePageIndexDatabase : IPageIndexDatabase, IDisposable
         var json = await cmd.ExecuteScalarAsync() as string;
 
         return json;
+    }
+
+    public async Task<List<(string DocId, string TreeJson)>> GetDocumentTreesByGroupAsync(string groupName)
+    {
+        var cmd = _db.CreateCommand();
+        cmd.CommandText = "SELECT doc_id, tree_json FROM document_trees WHERE group_name = $group ORDER BY created_at";
+        cmd.Parameters.AddWithValue("$group", groupName);
+
+        var results = new List<(string, string)>();
+        using var reader = await cmd.ExecuteReaderAsync();
+        while (await reader.ReadAsync())
+            results.Add((reader.GetString(0), reader.GetString(1)));
+        return results;
     }
 
     public async Task<Dictionary<string, string>> GetNodeTextsAsync(string docId, List<string> nodeIds)
