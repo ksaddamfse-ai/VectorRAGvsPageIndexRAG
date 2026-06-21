@@ -49,4 +49,11 @@ Filters/              — Swagger filters
 ## Build
 
 - Target: net10.0
-- `dotnet build` to compile, `dotnet run` to serve at localhost:51095
+- `dotnet build VectorRAGvsPageIndexRAG.sln` to compile all projects
+- `dotnet test Tests\VectorRAGvsPageIndexRAG.Tests\VectorRAGvsPageIndexRAG.Tests.csproj` to run tests
+- `dotnet run` to serve at localhost:51095
+- Test project lives under `Tests\` to avoid Web SDK glob picking up test `.cs` files; main `.csproj` has `<Compile Remove="Tests\**\*">`
+
+## Learnings
+
+Record all provider integration decisions and design choices in LEARNINGS.md � why a specific NuGet package was chosen, what alternatives existed, and any config/code implications. This keeps design rationale discoverable and prevents repeated deliberation.

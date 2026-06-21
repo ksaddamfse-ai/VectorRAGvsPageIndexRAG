@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Vector RAG vs PageIndex RAG — Benchmark</title>
+<style>
+body { font-family: system-ui, sans-serif; max-width: 960px; margin: 0 auto; padding: 2rem; background: #f8f9fa; color: #212529; }
+h1 { border-bottom: 2px solid #dee2e6; padding-bottom: .5rem; }
+h2 { margin-top: 2rem; }
+table { width: 100%; border-collapse: collapse; margin: 1rem 0; }
+th, td { padding: .6rem .8rem; text-align: left; border-bottom: 1px solid #dee2e6; }
+th { background: #e9ecef; font-weight: 600; }
+.positive { color: #2b8a3e; }
+.negative { color: #c92a2a; }
+.neutral { color: #5c7cba; }
+.arch-box { background: #fff; border: 1px solid #dee2e6; border-radius: 8px; padding: 1.5rem; margin: 1rem 0; }
+.arch-box h3 { margin-top: 0; }
+code { background: #e9ecef; padding: .1rem .3rem; border-radius: 4px; font-size: .9em; }
+footer { margin-top: 3rem; font-size: .85rem; color: #868e96; text-align: center; }
+</style>
+</head>
+<body>
+<h1>Vector RAG vs PageIndex RAG</h1>
+<p>Benchmark comparing two RAG strategies on a resume PDF. Same LLM backend (OpenRouter), same embedding model.</p>
+
+<div style="display: flex; gap: 1rem; margin: 1.5rem 0;">
+  <div class="arch-box" style="flex:1">
+    <h3 style="color:#1c7ed6">Vector RAG</h3>
+    <p>PDF → text → chunks → embeddings → <strong>Qdrant</strong> vector DB</p>
+    <p>Query: embed question → nearest-neighbor search → LLM answer</p>
+    <p><strong>Pros:</strong> Semantic search finds related content even without keyword match. Fast retrieval (~2–6s).</p>
+    <p><strong>Cons:</strong> Chunk boundaries may split relevant context. No hierarchy awareness.</p>
+  </div>
+  <div class="arch-box" style="flex:1">
+    <h3 style="color:#2f9e44">PageIndex RAG</h3>
+    <p>PDF → text → LLM extracts <strong>tree structure</strong> → SQLite store</p>
+    <p>Query: LLM selects relevant tree nodes → return node text → LLM answer</p>
+    <p><strong>Pros:</strong> Hierarchical understanding. Section-aware context.</p>
+    <p><strong>Cons:</strong> Two LLM calls per query (nav + answer). Slower (~3–30s). Tree quality depends on LLM.</p>
+  </div>
+</div>
+
+<h2>Benchmark Results</h2>
+<p>5 questions across both systems on the same resume PDF. Latency in seconds. Quality scored manually (✓ = correct, ~ = partial, ✗ = wrong/missed).</p>
+
+<table>
+<thead>
+<tr>
+  <th>#</th>
+  <th>Question</th>
+  <th>Vector RAG</th>
+  <th>Latency</th>
+  <th>PageIndex RAG</th>
+  <th>Latency</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td>1</td>
+  <td>Candidate's email?</td>
+  <td class="negative">✗ Not found</td>
+  <td>2.57s</td>
+  <td class="negative">✗ Not found</td>
+  <td>9.01s</td>
+</tr>
+<tr>
+  <td>2</td>
+  <td>Programming languages?</td>
+  <td class="positive">✓ C#, JS, TS, SQL</td>
+  <td>1.51s</td>
+  <td class="positive">✓ C#, JS, TS, SQL</td>
+  <td>3.37s</td>
+</tr>
+<tr>
+  <td>3</td>
+  <td>AI tools used?</td>
+  <td class="neutral">~ Partial list</td>
+  <td>6.21s</td>
+  <td class="positive">✓ Devin, Copilot, Rovo</td>
+  <td>30.24s</td>
+</tr>
+<tr>
+  <td>4</td>
+  <td>Previous employer?</td>
+  <td class="positive">✓ NewGlobe Education</td>
+  <td>5.32s</td>
+  <td class="negative">✗ Not found</td>
+  <td>4.50s</td>
+</tr>
+<tr>
+  <td>5</td>
+  <td>Educational background?</td>
+  <td class="positive">✓ B.Tech</td>
+  <td>28.57s</td>
+  <td class="positive">✓ B.Tech</td>
+  <td>14.03s</td>
+</tr>
+</tbody>
+</table>
+
+<h2>Summary</h2>
+<table>
+<thead>
+<tr><th>Metric</th><th>Vector RAG</th><th>PageIndex RAG</th></tr>
+</thead>
+<tbody>
+<tr><td>Correct answers</td><td class="positive">3 / 5</td><td class="positive">3 / 5</td></tr>
+<tr><td>Partial answers</td><td class="neutral">1 / 5</td><td>0 / 5</td></tr>
+<tr><td>Missed</td><td class="negative">1 / 5</td><td class="negative">2 / 5</td></tr>
+<tr><td>Mean latency</td><td><strong>8.84s</strong></td><td><strong>12.23s</strong></td></tr>
+<tr><td>Median latency</td><td><strong>5.32s</strong></td><td><strong>9.01s</strong></td></tr>
+</tbody>
+</table>
+
+<p><strong>Takeaway:</strong> Vector RAG is faster and more consistent, but can miss context split across chunk boundaries. PageIndex RAG has richer section awareness (AI tools question) but higher latency and tree-navigation failures. Neither found the email — the resume text positions it in the header, which both strategies struggled with.</p>
+
+<footer>
+  Generated from <code>VectorRAGvsPageIndexRAG</code> benchmark run on 2026-06-21.
+</footer>
+</body>
+</html>

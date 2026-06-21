@@ -8,13 +8,21 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Remove="Tests\**\*" />
+    <Content Remove="Tests\**\*" />
+    <EmbeddedResource Remove="Tests\**\*" />
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="Anthropic" Version="12.29.1" />
     <PackageReference Include="Azure.AI.OpenAI" Version="2.1.0" />
+    <PackageReference Include="Google_GenerativeAI.Microsoft" Version="3.6.6" />
     <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.9" />
-    <PackageReference Include="Microsoft.Extensions.AI" Version="10.3.0" />
-    <PackageReference Include="Microsoft.Extensions.AI.OpenAI" Version="10.3.0" />
+    <PackageReference Include="Microsoft.Extensions.AI" Version="10.7.0" />
+    <PackageReference Include="Microsoft.Extensions.AI.OpenAI" Version="10.7.0" />
+    <PackageReference Include="Microsoft.SemanticKernel.Connectors.Qdrant" Version="1.74.0-preview" />
     <PackageReference Include="Swashbuckle.AspNetCore" Version="6.8.0" />
-    <PackageReference Include="Microsoft.SemanticKernel.Core" Version="1.31.0" />
+    <PackageReference Include="Microsoft.SemanticKernel.Core" Version="1.77.0" />
     <PackageReference Include="PdfPig" Version="0.1.14" />
     <PackageReference Include="Qdrant.Client" Version="1.18.1" />
   </ItemGroup>

@@ -1,8 +1,8 @@
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Options;
-using Qdrant.Client;
-using Qdrant.Client.Grpc;
+using Microsoft.Extensions.VectorData;
 using VectorRAGvsPageIndexRAG.DTOs;
+using VectorRAGvsPageIndexRAG.Models;
 using VectorRAGvsPageIndexRAG.Services.Interfaces;
 using VectorRAGvsPageIndexRAG.Settings;
 
@@ -11,23 +11,18 @@ namespace VectorRAGvsPageIndexRAG.Services;
 public class RagQueryService(
     IChatClientFactory clientFactory,
     IEmbeddingGenerator<string, Embedding<float>> embedder,
-    QdrantClient qdrant,
+    VectorStore vectorStore,
     IOptions<VectorStoreRegistryEntry> vsConfig) : IRagQueryService
 {
     public async Task<RagQueryResponse> QueryAsync(RagQueryRequest request)
     {
         var queryEmbedding = await embedder.GenerateAsync(request.Question);
-        var vector = queryEmbedding.Vector.ToArray();
+        var queryVector = new ReadOnlyMemory<float>(queryEmbedding.Vector.ToArray());
 
-        var results = await qdrant.SearchAsync(
-            vsConfig.Value.DefaultCollectionName,
-            vector,
-            limit: (ulong)request.TopK);
-
-        var chunks = results.Select(r => new RagChunkResult(
-            r.Payload["text"].StringValue,
-            r.Payload["source"].StringValue,
-            r.Score)).ToList();
+        var collection = vectorStore.GetCollection<Guid, RagChunkRecord>(vsConfig.Value.DefaultCollectionName);
+        var chunks = new List<RagChunkResult>();
+        await foreach (var result in collection.SearchAsync(queryVector, top: request.TopK))
+            chunks.Add(new RagChunkResult(result.Record.Text, result.Record.Source, result.Score ?? 0));
 
         if (chunks.Count == 0)
             return new RagQueryResponse("No relevant context found.", []);

@@ -9,9 +9,6 @@
 # Local database artifacts (generated at runtime)
 pageindex.db
 
-# Learning journal
-LEARNINGS.md
-
 # User-specific files
 *.rsuser
 *.suo
@@ -489,3 +486,6 @@ $RECYCLE.BIN/
 
 # SQLite database files (generated at runtime)
 *.db
+
+# Server log files
+svr*.log

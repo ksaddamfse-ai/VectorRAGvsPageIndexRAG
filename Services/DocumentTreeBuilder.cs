@@ -15,7 +15,7 @@ public class DocumentTreeBuilder(
     };
 
     public async Task<DocumentTree> BuildTreeAsync(string text, string fileName,
-        string provider = "NvidiaNim", string model = "meta/llama-3.3-70b-instruct")
+        string provider, string model)
     {
         var client = clientFactory.GetClient($"{provider}__{model}")
             ?? throw new InvalidOperationException($"Client not found for {provider}/{model}");
