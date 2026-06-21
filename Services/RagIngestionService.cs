@@ -16,14 +16,16 @@ public class RagIngestionService(
     IOptions<VectorStoreRegistryEntry> vsConfig,
     ILogger<RagIngestionService> logger) : IRagIngestionService
 {
-    public async Task<RagIngestionResult> IngestAsync(string text, string fileName)
+    public async Task<RagIngestionResult> IngestAsync(string text, string fileName, string collectionName = "")
     {
         var cfg = vsConfig.Value;
+        var collName = string.IsNullOrWhiteSpace(collectionName) ? cfg.DefaultCollectionName : collectionName;
+
         var lines = TextChunker.SplitPlainTextLines(text, cfg.ChunkSize);
         var paragraphs = TextChunker.SplitPlainTextParagraphs(lines, cfg.ChunkSize, cfg.ChunkOverlap);
         var chunks = paragraphs.Select((p, i) => new RagChunk
         {
-            Id = Guid.NewGuid().ToString(),
+            Id = RagChunk.ComputeId(p, fileName),
             Text = p,
             Source = fileName,
             ChunkIndex = i,
@@ -33,43 +35,67 @@ public class RagIngestionService(
         if (chunks.Count == 0)
         {
             logger.LogWarning("No chunks produced for document {File}", fileName);
-            return new RagIngestionResult(fileName, 0, []);
+            return new RagIngestionResult(fileName, 0, [], collName);
         }
 
-        var embeddings = await embedder.GenerateAsync(chunks.Select(c => c.Text));
-        var vectorSize = embeddings[0].Vector.Length;
-        for (int i = 0; i < chunks.Count; i++)
-            chunks[i].Vector = embeddings[i].Vector.ToArray();
-
-        var definition = new VectorStoreCollectionDefinition
+        var allGuids = chunks.Select(c => Guid.Parse(c.Id)).ToList();
+        var existingSet = new HashSet<Guid>();
+        try
         {
-            Properties = new List<VectorStoreProperty>
+            var collection = vectorStore.GetCollection<Guid, RagChunkRecord>(collName);
+            await foreach (var record in collection.GetAsync(allGuids, null, cancellationToken: default))
+                existingSet.Add(record.Key);
+        }
+        catch
+        {
+            // Collection doesn't exist yet — all chunks are new
+        }
+
+        var missing = chunks.Where(c => !existingSet.Contains(Guid.Parse(c.Id))).ToList();
+
+        if (missing.Count > 0)
+        {
+            var batchSize = cfg.EmbeddingBatchSize;
+            for (int i = 0; i < missing.Count; i += batchSize)
             {
-                new VectorStoreKeyProperty("Key", typeof(Guid)),
-                new VectorStoreDataProperty("Text", typeof(string)),
-                new VectorStoreDataProperty("Source", typeof(string)),
-                new VectorStoreDataProperty("ChunkIndex", typeof(int)),
-                new VectorStoreDataProperty("TotalChunks", typeof(int)),
-                new VectorStoreVectorProperty("Vector", typeof(float[]), vectorSize)
+                var batch = missing.Skip(i).Take(batchSize).ToList();
+                var embeddings = await embedder.GenerateAsync(batch.Select(c => c.Text));
+                for (int j = 0; j < batch.Count; j++)
+                    batch[j].Vector = embeddings[j].Vector.ToArray();
             }
-        };
 
-        var collection = vectorStore.GetCollection<Guid, RagChunkRecord>(cfg.DefaultCollectionName, definition);
-        await collection.EnsureCollectionExistsAsync();
+            var vectorSize = missing[0].Vector.Length;
+            var definition = new VectorStoreCollectionDefinition
+            {
+                Properties = new List<VectorStoreProperty>
+                {
+                    new VectorStoreKeyProperty("Key", typeof(Guid)),
+                    new VectorStoreDataProperty("Text", typeof(string)),
+                    new VectorStoreDataProperty("Source", typeof(string)),
+                    new VectorStoreDataProperty("ChunkIndex", typeof(int)),
+                    new VectorStoreDataProperty("TotalChunks", typeof(int)),
+                    new VectorStoreVectorProperty("Vector", typeof(float[]), vectorSize)
+                }
+            };
 
-        var records = chunks.Select(c => new RagChunkRecord
-        {
-            Key = Guid.Parse(c.Id),
-            Text = c.Text,
-            Source = c.Source,
-            ChunkIndex = c.ChunkIndex,
-            TotalChunks = c.TotalChunks,
-            Vector = c.Vector
-        }).ToList();
+            var collection = vectorStore.GetCollection<Guid, RagChunkRecord>(collName, definition);
+            await collection.EnsureCollectionExistsAsync();
 
-        await collection.UpsertAsync(records);
+            var records = missing.Select(c => new RagChunkRecord
+            {
+                Key = Guid.Parse(c.Id),
+                Text = c.Text,
+                Source = c.Source,
+                ChunkIndex = c.ChunkIndex,
+                TotalChunks = c.TotalChunks,
+                Vector = c.Vector
+            }).ToList();
 
-        logger.LogInformation("Ingested {File}: {Count} chunks", fileName, chunks.Count);
-        return new RagIngestionResult(fileName, chunks.Count, chunks);
+            await collection.UpsertAsync(records);
+        }
+
+        logger.LogInformation("Ingested {File}: {Count} chunks ({Existing} existing, {New} new)",
+            fileName, chunks.Count, chunks.Count - missing.Count, missing.Count);
+        return new RagIngestionResult(fileName, chunks.Count, chunks, collName);
     }
 }
