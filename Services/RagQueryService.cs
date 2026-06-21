@@ -19,7 +19,9 @@ public class RagQueryService(
         var queryEmbedding = await embedder.GenerateAsync(request.Question);
         var queryVector = new ReadOnlyMemory<float>(queryEmbedding.Vector.ToArray());
 
-        var collection = vectorStore.GetCollection<Guid, RagChunkRecord>(vsConfig.Value.DefaultCollectionName);
+        var collName = string.IsNullOrWhiteSpace(request.CollectionName)
+            ? vsConfig.Value.DefaultCollectionName : request.CollectionName;
+        var collection = vectorStore.GetCollection<Guid, RagChunkRecord>(collName);
         var chunks = new List<RagChunkResult>();
         await foreach (var result in collection.SearchAsync(queryVector, top: request.TopK))
             chunks.Add(new RagChunkResult(result.Record.Text, result.Record.Source, result.Score ?? 0));
