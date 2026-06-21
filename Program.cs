@@ -2,6 +2,8 @@ using Anthropic;
 using Azure.AI.OpenAI;
 using GenerativeAI.Microsoft;
 using Microsoft.Extensions.AI;
+using Microsoft.Extensions.VectorData;
+using Microsoft.SemanticKernel.Connectors.Qdrant;
 using OpenAI;
 using Qdrant.Client;
 using System.ClientModel;
@@ -80,14 +82,21 @@ builder.Services.AddEmbeddingGenerator(_ => activeEmbeddingProviderSection["Type
         .GetEmbeddingClient(activeEmbeddingModel).AsIEmbeddingGenerator()
 });
 
-// ── Active vector store ──
+// ── Active vector store (MEVD abstraction) ──
 var vectorStoreRegistrySection = builder.Configuration.GetSection("VectorStoreRegistry");
-var activeVectorStoreProvider = vectorStoreRegistrySection["ActiveProvider"];
-var activeVectorStoreSection = vectorStoreRegistrySection.GetSection(activeVectorStoreProvider!);
+var activeVectorStoreProvider = vectorStoreRegistrySection["ActiveProvider"]!;
+var activeVectorStoreSection = vectorStoreRegistrySection.GetSection(activeVectorStoreProvider);
 
-builder.Services.AddSingleton(_ => new QdrantClient(
-    host: activeVectorStoreSection["Host"] ?? "localhost",
-    port: activeVectorStoreSection.GetValue<int>("Port")));
+builder.Services.AddSingleton<VectorStore>(_ => activeVectorStoreProvider switch
+{
+    "Qdrant" => new QdrantVectorStore(
+        new QdrantClient(
+            host: activeVectorStoreSection["Host"] ?? "localhost",
+            port: activeVectorStoreSection.GetValue<int>("Port")),
+        ownsClient: true),
+    _ => throw new InvalidOperationException(
+        $"Unknown vector store provider: {activeVectorStoreProvider}")
+});
 
 builder.Services.Configure<VectorStoreRegistryEntry>(options => activeVectorStoreSection.Bind(options));
 
@@ -113,5 +122,7 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI();
 }
 
+app.UseDefaultFiles();
+app.UseStaticFiles();
 app.MapControllers();
 app.Run();

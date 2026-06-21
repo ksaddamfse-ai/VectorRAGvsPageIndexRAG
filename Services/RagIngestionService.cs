@@ -1,11 +1,9 @@
 #pragma warning disable SKEXP0050
 
-using Grpc.Core;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Options;
+using Microsoft.Extensions.VectorData;
 using Microsoft.SemanticKernel.Text;
-using Qdrant.Client;
-using Qdrant.Client.Grpc;
 using VectorRAGvsPageIndexRAG.Models;
 using VectorRAGvsPageIndexRAG.Services.Interfaces;
 using VectorRAGvsPageIndexRAG.Settings;
@@ -14,7 +12,7 @@ namespace VectorRAGvsPageIndexRAG.Services;
 
 public class RagIngestionService(
     IEmbeddingGenerator<string, Embedding<float>> embedder,
-    QdrantClient qdrant,
+    VectorStore vectorStore,
     IOptions<VectorStoreRegistryEntry> vsConfig,
     ILogger<RagIngestionService> logger) : IRagIngestionService
 {
@@ -39,37 +37,37 @@ public class RagIngestionService(
         }
 
         var embeddings = await embedder.GenerateAsync(chunks.Select(c => c.Text));
-        var actualVectorSize = embeddings[0].Vector.Length;
+        var vectorSize = embeddings[0].Vector.Length;
         for (int i = 0; i < chunks.Count; i++)
             chunks[i].Vector = embeddings[i].Vector.ToArray();
 
-        var points = chunks.Select(c => new PointStruct
+        var definition = new VectorStoreCollectionDefinition
         {
-            Id = new PointId { Uuid = c.Id },
-            Vectors = c.Vector,
-            Payload =
+            Properties = new List<VectorStoreProperty>
             {
-                ["text"] = c.Text,
-                ["source"] = c.Source,
-                ["chunk_index"] = c.ChunkIndex,
-                ["total_chunks"] = c.TotalChunks
+                new VectorStoreKeyProperty("Key", typeof(string)),
+                new VectorStoreDataProperty("Text", typeof(string)),
+                new VectorStoreDataProperty("Source", typeof(string)),
+                new VectorStoreDataProperty("ChunkIndex", typeof(int)),
+                new VectorStoreDataProperty("TotalChunks", typeof(int)),
+                new VectorStoreVectorProperty("Vector", typeof(float[]), vectorSize)
             }
+        };
+
+        var collection = vectorStore.GetCollection<Guid, RagChunkRecord>(cfg.DefaultCollectionName, definition);
+        await collection.EnsureCollectionExistsAsync();
+
+        var records = chunks.Select(c => new RagChunkRecord
+        {
+            Key = Guid.Parse(c.Id),
+            Text = c.Text,
+            Source = c.Source,
+            ChunkIndex = c.ChunkIndex,
+            TotalChunks = c.TotalChunks,
+            Vector = c.Vector
         }).ToList();
 
-        if (points.Count > 0)
-        {
-            try
-            {
-                await qdrant.CreateCollectionAsync(cfg.DefaultCollectionName, new VectorParams
-                {
-                    Size = (ulong)(chunks[0].Vector?.Length ?? 0),
-                    Distance = Distance.Cosine
-                });
-            }
-            catch (RpcException ex) when (ex.StatusCode == StatusCode.AlreadyExists) { }
-
-            await qdrant.UpsertAsync(cfg.DefaultCollectionName, points);
-        }
+        await collection.UpsertAsync(records);
 
         logger.LogInformation("Ingested {File}: {Count} chunks", fileName, chunks.Count);
         return new RagIngestionResult(fileName, chunks.Count, chunks);
