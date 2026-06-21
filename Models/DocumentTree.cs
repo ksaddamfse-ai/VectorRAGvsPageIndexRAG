@@ -22,6 +22,9 @@ public class DocumentTree
     [JsonIgnore]
     public string FileName { get; set; } = "";
 
+    [JsonIgnore]
+    public string GroupName { get; set; } = "";
+
     [JsonPropertyName("total_pages")]
     public int TotalPages { get; set; }
 }
