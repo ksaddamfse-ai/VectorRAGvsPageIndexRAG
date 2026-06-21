@@ -1,5 +1,6 @@
 using Anthropic;
 using Azure.AI.OpenAI;
+using GenerativeAI.Microsoft;
 using Microsoft.Extensions.AI;
 using OpenAI;
 using Qdrant.Client;
@@ -47,6 +48,8 @@ foreach (var providerSection in builder.Configuration.GetSection("ProviderRegist
 
             "Anthropic" => new AnthropicClient { ApiKey = providerSection["ApiKey"]! }
                 .AsIChatClient(chatModel),
+
+            "GoogleAI" => new GenerativeAIChatClient(providerSection["ApiKey"]!),
 
             _ => new OpenAIClient(
                 new ApiKeyCredential(providerSection["ApiKey"] ?? "not-needed"),

@@ -1,0 +1,1 @@
+Record all provider integration decisions and design choices in LEARNINGS.md — why a specific NuGet package was chosen, what alternatives existed, and any config/code implications. This keeps design rationale discoverable and prevents repeated deliberation.

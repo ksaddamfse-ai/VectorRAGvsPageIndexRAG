@@ -50,3 +50,7 @@ Filters/              â€” Swagger filters
 
 - Target: net10.0
 - `dotnet build` to compile, `dotnet run` to serve at localhost:51095
+
+## Learnings
+
+Record all provider integration decisions and design choices in LEARNINGS.md — why a specific NuGet package was chosen, what alternatives existed, and any config/code implications. This keeps design rationale discoverable and prevents repeated deliberation.
