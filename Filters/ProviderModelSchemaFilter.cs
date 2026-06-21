@@ -33,6 +33,6 @@ public class ProviderModelSchemaFilter(
             topKProp.Default = new OpenApiInteger(2);
 
         if (schema.Properties.TryGetValue("collectionName", out var collProp))
-            collProp.Default = new OpenApiString("documents");
+            collProp.Default = new OpenApiString("PDFs");
     }
 }

@@ -3,7 +3,7 @@ namespace VectorRAGvsPageIndexRAG.Settings;
 public class VectorStoreRegistryEntry
 {
     public string Type { get; set; } = "";
-    public string DefaultCollectionName { get; set; } = "documents";
+    public string DefaultCollectionName { get; set; } = "PDFs";
     public int ChunkSize { get; set; } = 512;
     public int ChunkOverlap { get; set; } = 51;
     public int EmbeddingBatchSize { get; set; } = 500;
