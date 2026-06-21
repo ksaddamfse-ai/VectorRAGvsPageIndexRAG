@@ -15,7 +15,7 @@ public class DocumentTreeBuilder(
     };
 
     public async Task<DocumentTree> BuildTreeAsync(string text, string fileName,
-        string provider = "GoogleAI", string model = "gemini-3.5-flash")
+        string provider, string model)
     {
         var client = clientFactory.GetClient($"{provider}__{model}")
             ?? throw new InvalidOperationException($"Client not found for {provider}/{model}");

@@ -20,13 +20,13 @@ public class ProviderModelSchemaFilter(
         if (schema.Properties.TryGetValue("provider", out var providerProp))
         {
             providerProp.Enum = providers.Select(p => new OpenApiString(p)).Cast<IOpenApiAny>().ToList();
-            providerProp.Default = new OpenApiString("GoogleAI");
+            providerProp.Default = new OpenApiString("OpenCode");
         }
 
         if (schema.Properties.TryGetValue("model", out var modelProp))
         {
             modelProp.Enum = models.Select(m => new OpenApiString(m)).Cast<IOpenApiAny>().ToList();
-            modelProp.Default = new OpenApiString("gemini-3.5-flash");
+            modelProp.Default = new OpenApiString("deepseek-v4-flash-free");
         }
 
         if (schema.Properties.TryGetValue("topK", out var topKProp))
