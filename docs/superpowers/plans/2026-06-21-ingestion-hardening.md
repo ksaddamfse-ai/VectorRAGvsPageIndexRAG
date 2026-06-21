@@ -200,7 +200,7 @@ public class RagIngestionService(
 
         // Find which chunks already exist in Qdrant
         var allGuids = chunks.Select(c => Guid.Parse(c.Id)).ToList();
-        var existing = await collection.GetBatchAsync(allGuids);
+        var existing = await collection.GetAsync(allGuids);
         var existingSet = existing.Select(r => r.Key).ToHashSet();
         var missing = chunks.Where(c => !existingSet.Contains(Guid.Parse(c.Id))).ToList();
 
@@ -258,11 +258,11 @@ public class RagIngestionService(
 }
 ```
 
-Wait — the collection needs to be created before `GetBatchAsync` is called, but we only know the vector size after embedding. This is a problem.
+Wait — the collection needs to be created before `GetAsync` is called, but we only know the vector size after embedding. This is a problem.
 
-**Refined approach:** The collection already exists from a prior ingestion. `EnsureCollectionExistsAsync` is only needed for first-time ingestion. `GetBatchAsync` works even if the collection is empty.
+**Refined approach:** The collection already exists from a prior ingestion. `EnsureCollectionExistsAsync` is only needed for first-time ingestion. `GetAsync` works even if the collection is empty.
 
-But for the **first ingestion ever**, `GetBatchAsync` on a non-existent collection will throw. So we need to handle this.
+But for the **first ingestion ever**, `GetAsync` on a non-existent collection will throw. So we need to handle this.
 
 **Simplest fix:** Always call `EnsureCollectionExistsAsync` first (it's a no-op if collection exists). But we don't know the vector size yet...
 
@@ -272,7 +272,7 @@ But for the **first ingestion ever**, `GetBatchAsync` on a non-existent collecti
 
 Actually — even simpler: use a two-phase approach where the collection is created early with a known vector dimension. But the whole point of the current design is to derive vector size at runtime.
 
-**Real simplest fix:** Move `GetBatchAsync` inside a try/catch. If collection doesn't exist, treat all chunks as missing.
+**Real simplest fix:** Move `GetAsync` inside a try/catch. If collection doesn't exist, treat all chunks as missing.
 
 Let me rewrite the service correctly:
 
@@ -322,9 +322,9 @@ public class RagIngestionService(
         var existingSet = new HashSet<Guid>();
         try
         {
-            // Try GetBatchAsync first — collection may not exist yet
+            // Try GetAsync first — collection may not exist yet
             var collection = vectorStore.GetCollection<Guid, RagChunkRecord>(collName);
-            var existing = await collection.GetBatchAsync(allGuids);
+            var existing = await collection.GetAsync(allGuids);
             existingSet = existing.Select(r => r.Key).ToHashSet();
         }
         catch
@@ -384,10 +384,10 @@ public class RagIngestionService(
 
 Hmm wait — this is getting complicated. Let me step back.
 
-The problem: `GetBatchAsync` needs the collection to exist, but we create the collection with a definition that includes vector size (which we only know after embedding). This is a chicken-and-egg issue for the **first ingestion**.
+The problem: `GetAsync` needs the collection to exist, but we create the collection with a definition that includes vector size (which we only know after embedding). This is a chicken-and-egg issue for the **first ingestion**.
 
 Solutions:
-1. **Try/catch GetBatchAsync** — if collection doesn't exist, all chunks are missing. Then create + embed + upsert as usual.
+1. **Try/catch GetAsync** — if collection doesn't exist, all chunks are missing. Then create + embed + upsert as usual.
 2. **Use a separate collection object for reads** — `GetCollection<TKey, TRecord>` without definition. This might work for reads without requiring the definition. Let me check.
 
 Actually, looking at the existing code in `RagIngestionService.cs` line 57:
@@ -402,17 +402,17 @@ var collection = vectorStore.GetCollection<Guid, RagChunkRecord>(collName);
 
 This might work for reads even if the collection doesn't exist yet — it would just return an empty result. But I'm not sure if it throws. Let me just use try/catch — it's the safe approach.
 
-Actually, looking more carefully at the MEVD API, `GetCollection` without a definition should work for reads. The definition is needed for creating the collection. For `GetBatchAsync`, the collection doesn't need to exist (it would just return empty). But the Qdrant connector might throw...
+Actually, looking more carefully at the MEVD API, `GetCollection` without a definition should work for reads. The definition is needed for creating the collection. For `GetAsync`, the collection doesn't need to exist (it would just return empty). But the Qdrant connector might throw...
 
 The try/catch approach is the safest and simplest. Let me finalize the service rewrite.
 
-Actually wait — I notice there's an issue with the dedup logic. If the user sets a `collectionName` that differs from the default, the new collection might be empty — `GetBatchAsync` on an empty collection is fine, it just returns nothing. The issue is only when the collection doesn't exist at all (first time).
+Actually wait — I notice there's an issue with the dedup logic. If the user sets a `collectionName` that differs from the default, the new collection might be empty — `GetAsync` on an empty collection is fine, it just returns nothing. The issue is only when the collection doesn't exist at all (first time).
 
 Let me keep the try/catch and present the corrected code.<｜end▁of▁thinking｜>
 
 - [ ] **Step 1: Rewrite RagIngestionService with dedup + batching**
 
-The tricky part: `GetBatchAsync` needs the collection to exist, but we only know vector size after embedding (chicken-and-egg for first ingestion). Solution: try/catch `GetBatchAsync` — if collection doesn't exist, all chunks are new.
+The tricky part: `GetAsync` needs the collection to exist, but we only know vector size after embedding (chicken-and-egg for first ingestion). Solution: try/catch `GetAsync` — if collection doesn't exist, all chunks are new.
 
 ```csharp
 #pragma warning disable SKEXP0050
@@ -460,7 +460,7 @@ public class RagIngestionService(
         try
         {
             var collection = vectorStore.GetCollection<Guid, RagChunkRecord>(collName);
-            var existing = await collection.GetBatchAsync(allGuids, cancellationToken: default);
+            var existing = await collection.GetAsync(allGuids, cancellationToken: default);
             existingSet = existing.Select(r => r.Key).ToHashSet();
         }
         catch
@@ -584,9 +584,9 @@ Append to LEARNINGS.md:
 ### 2026-06-21: Deterministic Chunk IDs + Batch Embedding
 - Chunk IDs derived from SHA256(source + "\0" + text), truncated to 16 bytes → GUID
 - **Why:** Enables idempotent re-ingestion — same text = same ID, upsert overwrites
-- GetBatchAsync before embedding finds existing chunks; only missing chunks are embedded
+- GetAsync before embedding finds existing chunks; only missing chunks are embedded
 - EmbeddingBatchSize config controls how many chunks are sent per embedding API call
-- **Edge case:** First ingestion (no collection yet) — GetBatchAsync throws, caught by try/catch; all chunks treated as new
+- **Edge case:** First ingestion (no collection yet) — GetAsync throws, caught by try/catch; all chunks treated as new
 - collectionName optional query param on POST /api/rag/documents, defaults to DefaultCollectionName
 ```
 

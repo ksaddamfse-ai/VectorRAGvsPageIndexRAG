@@ -9,7 +9,7 @@ public class VectorStoreTests
     {
         var chunk = new RagChunk
         {
-            Id = Guid.NewGuid().ToString(),
+            Id = RagChunk.ComputeId("test text", "test.pdf"),
             Text = "test text",
             Source = "test.pdf",
             ChunkIndex = 0,
@@ -33,5 +33,44 @@ public class VectorStoreTests
         Assert.Equal(chunk.ChunkIndex, record.ChunkIndex);
         Assert.Equal(chunk.TotalChunks, record.TotalChunks);
         Assert.Equal(chunk.Vector, record.Vector);
+    }
+
+    [Fact]
+    public void ComputeId_Deterministic()
+    {
+        var id1 = RagChunk.ComputeId("hello world", "doc.pdf");
+        var id2 = RagChunk.ComputeId("hello world", "doc.pdf");
+        Assert.Equal(id1, id2);
+    }
+
+    [Fact]
+    public void ComputeId_DifferentInputs_DifferentIds()
+    {
+        var id1 = RagChunk.ComputeId("hello", "a.pdf");
+        var id2 = RagChunk.ComputeId("world", "b.pdf");
+        Assert.NotEqual(id1, id2);
+    }
+
+    [Fact]
+    public void ComputeId_NullBoundary_PreventsCollision()
+    {
+        var id1 = RagChunk.ComputeId("A", "doc.txt");
+        var id2 = RagChunk.ComputeId("txtA", "doc.");
+        Assert.NotEqual(id1, id2);
+    }
+
+    [Fact]
+    public void ComputeId_EmptyStrings_DoesNotThrow()
+    {
+        var id = RagChunk.ComputeId("", "");
+        Assert.NotNull(id);
+        Assert.NotEqual("", id);
+    }
+
+    [Fact]
+    public void ComputeId_ReturnsValidGuid()
+    {
+        var id = RagChunk.ComputeId("some text", "source");
+        Assert.True(Guid.TryParse(id, out _));
     }
 }

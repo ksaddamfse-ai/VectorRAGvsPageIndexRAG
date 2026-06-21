@@ -46,7 +46,7 @@ public class RagIngestionService(
             await foreach (var record in collection.GetAsync(allGuids, null, cancellationToken: default))
                 existingSet.Add(record.Key);
         }
-        catch
+        catch (Qdrant.Client.QdrantException)
         {
             // Collection doesn't exist yet — all chunks are new
         }
@@ -60,6 +60,8 @@ public class RagIngestionService(
             {
                 var batch = missing.Skip(i).Take(batchSize).ToList();
                 var embeddings = await embedder.GenerateAsync(batch.Select(c => c.Text));
+                if (embeddings.Count != batch.Count)
+                    throw new InvalidOperationException($"Expected {batch.Count} embeddings, got {embeddings.Count}");
                 for (int j = 0; j < batch.Count; j++)
                     batch[j].Vector = embeddings[j].Vector.ToArray();
             }
