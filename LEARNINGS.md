@@ -113,3 +113,11 @@
 - Changed defaults from NvidiaNim/meta/llama-3.3-70b-instruct to GoogleAI/gemini-3.5-flash
 - Files affected: ProviderModelSchemaFilter.cs, CompareQueryRequest.cs, PageIndexQueryRequest.cs, DocumentTreeBuilder.cs
 - Reason: Gemini requires no Qdrant instance for PageIndex RAG demos, and GoogleAI API key is simpler to obtain than NvidiaNim
+
+### 2026-06-21: Deterministic Chunk IDs + Batch Embedding
+- Chunk IDs derived from SHA256(source + "\0" + text), truncated to 16 bytes -> GUID
+- **Why:** Enables idempotent re-ingestion — same text = same ID, upsert overwrites
+- `GetAsync` (IAsyncEnumerable) before embedding finds existing chunks; only missing chunks are embedded
+- `EmbeddingBatchSize` config controls how many chunks are sent per embedding API call
+- **Edge case:** First ingestion (no collection yet) — `GetAsync` throws, caught by try/catch; all chunks treated as new
+- `collectionName` optional query param on `POST /api/rag/documents`, defaults to `DefaultCollectionName`
