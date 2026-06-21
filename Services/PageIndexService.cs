@@ -15,12 +15,14 @@ public class PageIndexService(
 {
 
     public async Task<PageIndexIngestionResponse> IngestAsync(IFormFile file,
-        string provider = "NvidiaNim", string model = "meta/llama-3.3-70b-instruct")
+        string provider = "NvidiaNim", string model = "meta/llama-3.3-70b-instruct",
+        string groupName = "PDFs")
     {
         using var stream = file.OpenReadStream();
         var text = documentProcessor.ExtractText(stream);
 
         var tree = await treeBuilder.BuildTreeAsync(text, file.FileName, provider, model);
+        tree.GroupName = groupName;
 
         var treeJson = JsonSerializer.Serialize(tree);
 
@@ -28,8 +30,8 @@ public class PageIndexService(
         await database.InsertDocumentTreeAsync(tree, treeJson);
         await database.InsertNodeTextsAsync(tree.DocId, FlattenNodes(tree.Children));
 
-        logger.LogInformation("PageIndex ingested {File}: {DocId} ({Nodes} nodes)",
-            file.FileName, tree.DocId, tree.Children.Count);
+        logger.LogInformation("PageIndex ingested {File}: {DocId} ({Nodes} nodes, group={Group})",
+            file.FileName, tree.DocId, tree.Children.Count, groupName);
 
         return new PageIndexIngestionResponse(
             tree.DocId, tree.FileName, "completed", tree.TotalPages, treeJson);
