@@ -39,14 +39,23 @@ public class PageIndexService(
 
     public async Task<PageIndexQueryResponse?> QueryAsync(PageIndexQueryRequest request)
     {
-        var json = await database.GetDocumentTreeJsonAsync(request.DocId);
+        string skeleton;
 
-        if (json is null)
-            return null;
-
-        var tree = JsonSerializer.Deserialize<DocumentTree>(json)!;
-
-        var skeleton = BuildSkeleton(tree);
+        DocumentTree? singleTree = null;
+        if (!string.IsNullOrWhiteSpace(request.GroupName))
+        {
+            skeleton = await BuildCombinedSkeletonAsync(request.GroupName);
+            if (string.IsNullOrWhiteSpace(skeleton))
+                return null;
+        }
+        else
+        {
+            var json = await database.GetDocumentTreeJsonAsync(request.DocId);
+            if (json is null)
+                return null;
+            singleTree = JsonSerializer.Deserialize<DocumentTree>(json)!;
+            skeleton = BuildSkeleton(singleTree);
+        }
 
         var client = clientFactory.GetClient($"{request.Provider}__{request.Model}")
             ?? throw new InvalidOperationException(
@@ -73,7 +82,11 @@ public class PageIndexService(
         if (nodeIds.Count == 0)
             return new PageIndexQueryResponse("No relevant sections found.", []);
 
-        var selectedTexts = await database.GetNodeTextsAsync(request.DocId, nodeIds);
+        Dictionary<string, string> selectedTexts;
+        if (!string.IsNullOrWhiteSpace(request.GroupName))
+            selectedTexts = await database.GetNodeTextsByNodeIdsAsync(nodeIds);
+        else
+            selectedTexts = await database.GetNodeTextsAsync(request.DocId, nodeIds);
 
         if (selectedTexts.Count == 0)
             return new PageIndexQueryResponse("No relevant sections found.", []);
@@ -91,11 +104,32 @@ public class PageIndexService(
 
         var answerResponse = await client.GetResponseAsync(answerPrompt);
 
-        var citations = FindCitations(tree.Children, nodeIds)
+        // ponytail: group queries skip citations — needs per-doc tree structure
+        if (!string.IsNullOrWhiteSpace(request.GroupName))
+            return new PageIndexQueryResponse(answerResponse?.Text ?? "No answer generated.", []);
+
+        var citations = FindCitations(singleTree!.Children, nodeIds)
             .Select(n => new PageIndexCitation(n.Title, 0, n.Text))
             .ToList();
 
         return new PageIndexQueryResponse(answerResponse?.Text ?? "No answer generated.", citations);
+    }
+
+    private async Task<string> BuildCombinedSkeletonAsync(string groupName)
+    {
+        var trees = await database.GetDocumentTreesByGroupAsync(groupName);
+        if (trees.Count == 0) return "";
+
+        var lines = new List<string>();
+        foreach (var (docId, treeJson) in trees)
+        {
+            var tree = JsonSerializer.Deserialize<DocumentTree>(treeJson)!;
+            lines.Add($"Document: {tree.FileName}");
+            BuildSkeletonLines(lines, tree.Children, "  ");
+            lines.Add("");
+        }
+
+        return string.Join("\n", lines);
     }
 
     private static IEnumerable<(string nodeId, string text)> FlattenNodes(List<TreeNode> nodes)

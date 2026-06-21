@@ -142,4 +142,20 @@ public class SqlitePageIndexDatabase : IPageIndexDatabase, IDisposable
 
         return selectedTexts;
     }
+
+    public async Task<Dictionary<string, string>> GetNodeTextsByNodeIdsAsync(List<string> nodeIds)
+    {
+        var selectText = _db.CreateCommand();
+        var placeholders = string.Join(",", nodeIds.Select((_, i) => $"$id{i}"));
+        selectText.CommandText = $"SELECT node_id, text FROM node_texts WHERE node_id IN ({placeholders})";
+        for (int i = 0; i < nodeIds.Count; i++)
+            selectText.Parameters.AddWithValue($"$id{i}", nodeIds[i]);
+
+        var selectedTexts = new Dictionary<string, string>();
+        using var reader = await selectText.ExecuteReaderAsync();
+        while (await reader.ReadAsync())
+            selectedTexts[reader.GetString(0)] = reader.GetString(1);
+
+        return selectedTexts;
+    }
 }

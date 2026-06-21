@@ -17,4 +17,6 @@ public interface IPageIndexDatabase
     Task<string?> GetDocumentTreeJsonAsync(string docId);
 
     Task<Dictionary<string, string>> GetNodeTextsAsync(string docId, List<string> nodeIds);
+
+    Task<Dictionary<string, string>> GetNodeTextsByNodeIdsAsync(List<string> nodeIds);
 }
