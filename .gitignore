@@ -6,9 +6,8 @@
 # dotenv files
 .env
 
-# Local docs and database artifacts
-docs/
-pageindexdb
+# Local database artifacts (generated at runtime)
+pageindex.db
 
 # Learning journal
 LEARNINGS.md
