@@ -13,8 +13,11 @@ public class TreeNode
     [JsonPropertyName("summary")]
     public string Summary { get; set; } = "";
 
-    [JsonPropertyName("text")]
-    public string Text { get; set; } = "";
+    [JsonPropertyName("start_page")]
+    public int? StartPage { get; set; }
+
+    [JsonPropertyName("end_page")]
+    public int? EndPage { get; set; }
 
     [JsonPropertyName("children")]
     public List<TreeNode> Children { get; set; } = [];

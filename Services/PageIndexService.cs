@@ -1,37 +1,37 @@
 using System.Text.Json;
 using Microsoft.Extensions.AI;
+using Microsoft.Extensions.Options;
 using VectorRAGvsPageIndexRAG.DTOs;
 using VectorRAGvsPageIndexRAG.Models;
 using VectorRAGvsPageIndexRAG.Services.Interfaces;
+using VectorRAGvsPageIndexRAG.Settings;
 
 namespace VectorRAGvsPageIndexRAG.Services;
 
 public class PageIndexService(
     DocumentTreeBuilder treeBuilder,
     IChatClientFactory clientFactory,
-    IDocumentProcessor documentProcessor,
     IPageIndexDatabase database,
+    IOptions<PageIndexSettings> settings,
     ILogger<PageIndexService> logger) : IPageIndexService
 {
-
     public async Task<PageIndexIngestionResponse> IngestAsync(IFormFile file,
         string provider = "NvidiaNim", string model = "meta/llama-3.3-70b-instruct",
         string groupName = "PDFs")
     {
         using var stream = file.OpenReadStream();
 
-        // ponytail: parse structure deterministically, LLM only for summaries
-        var tree = await treeBuilder.BuildTreeAsync(stream, file.FileName, provider, model);
+        var (tree, pageTexts) = await treeBuilder.BuildTreeAsync(stream, file.FileName, provider, model);
         tree.GroupName = groupName;
 
         var treeJson = JsonSerializer.Serialize(tree);
 
         await database.InitializeAsync();
-        await database.InsertDocumentTreeAsync(tree, treeJson);
-        await database.InsertNodeTextsAsync(tree.DocId, FlattenNodes(tree.Children));
+        await database.InsertDocumentAsync(tree, treeJson, pageTexts.Count);
+        await database.InsertPageTextsAsync(tree.DocId, pageTexts);
 
-        logger.LogInformation("PageIndex ingested {File}: {DocId} ({Nodes} nodes, group={Group})",
-            file.FileName, tree.DocId, tree.Children.Count, groupName);
+        logger.LogInformation("PageIndex ingested {File}: {DocId} ({Nodes} nodes, {Pages} pages, group={Group})",
+            file.FileName, tree.DocId, tree.Children.Count, pageTexts.Count, groupName);
 
         return new PageIndexIngestionResponse(
             tree.DocId, tree.FileName, "completed", tree.TotalPages, treeJson);
@@ -39,42 +39,49 @@ public class PageIndexService(
 
     public async Task<PageIndexQueryResponse?> QueryAsync(PageIndexQueryRequest request)
     {
-        var skeleton = await BuildCombinedSkeletonAsync(request.GroupName);
-        if (string.IsNullOrWhiteSpace(skeleton))
+        var trees = await database.GetDocumentTreesByGroupAsync(request.GroupName);
+        if (trees.Count == 0)
             return null;
 
         var client = clientFactory.GetClient($"{request.Provider}__{request.Model}")
             ?? throw new InvalidOperationException(
                 $"Client not found for {request.Provider}/{request.Model}");
 
+        var allNodes = new List<(string DocId, TreeNode Node)>();
+        foreach (var (docId, treeJson) in trees)
+        {
+            var tree = JsonSerializer.Deserialize<DocumentTree>(treeJson)!;
+            CollectNodes(docId, tree.Children, allNodes);
+        }
+
+        var maxDepth = settings.Value.MaxSkeletonDepth;
+        var skeleton = BuildTruncatedSkeleton(trees, maxDepth);
+
         var navPrompt = $"""
             You are a document navigator. Below is the table of contents of a document.
-            Each node has a title and summary.
+            Each node has a title, summary, and page numbers.
 
             {skeleton}
 
             Question: {request.Question}
 
             Return ONLY a JSON array of node IDs that are relevant to the question.
-            Example: ["sec_01", "sub_sec_02a"]
+            Example: ["node_001", "node_003"]
             """;
 
         var navResponse = await client.GetResponseAsync(navPrompt);
         var navContent = navResponse?.Text;
         if (string.IsNullOrWhiteSpace(navContent))
-            return new PageIndexQueryResponse("No relevant sections found.", []);
+            return new PageIndexQueryResponse("No relevant sections found.", [], []);
 
-        var nodeIds = ParseNodeIds(navContent);
-        if (nodeIds.Count == 0)
-            return new PageIndexQueryResponse("No relevant sections found.", []);
+        var selectedIds = ParseNodeIds(navContent);
+        if (selectedIds.Count == 0)
+            return new PageIndexQueryResponse("No relevant sections found.", [], []);
 
-        Dictionary<string, string> selectedTexts;
-        selectedTexts = await database.GetNodeTextsByNodeIdsAsync(nodeIds);
+        var (context, citations) = await RetrieveContextAsync(allNodes, selectedIds, trees);
 
-        if (selectedTexts.Count == 0)
-            return new PageIndexQueryResponse("No relevant sections found.", []);
-
-        var context = string.Join("\n\n", selectedTexts.Select(kv => kv.Value));
+        if (string.IsNullOrWhiteSpace(context))
+            return new PageIndexQueryResponse("No relevant sections found.", [], []);
 
         var answerPrompt = $"""
             Answer the question using ONLY the context below.
@@ -87,53 +94,98 @@ public class PageIndexService(
 
         var answerResponse = await client.GetResponseAsync(answerPrompt);
 
-        // ponytail: group queries skip citations — needs per-doc tree structure
-        return new PageIndexQueryResponse(answerResponse?.Text ?? "No answer generated.", []);
+        return new PageIndexQueryResponse(
+            answerResponse?.Text ?? "No answer generated.",
+            [],
+            citations);
     }
 
-    private async Task<string> BuildCombinedSkeletonAsync(string groupName)
+    private async Task<(string Context, List<PageCitation> Citations)> RetrieveContextAsync(
+        List<(string DocId, TreeNode Node)> allNodes,
+        List<string> selectedIds,
+        List<(string DocId, string TreeJson)> trees)
     {
-        var trees = await database.GetDocumentTreesByGroupAsync(groupName);
-        if (trees.Count == 0) return "";
+        var maxTokens = settings.Value.MaxTokensPerQuery;
+        var usedChars = 0;
+        var contextParts = new List<string>();
+        var citations = new List<PageCitation>();
 
+        var selectedNodes = allNodes.Where(n => selectedIds.Contains(n.Node.NodeId)).ToList();
+
+        foreach (var (docId, node) in selectedNodes)
+        {
+            var pagesToRetrieve = CollectPageRange(node);
+
+            if (pagesToRetrieve.Count > 0)
+            {
+                var pageTexts = await database.GetPageTextsAsync(docId, pagesToRetrieve.Min(), pagesToRetrieve.Max());
+                foreach (var kvp in pageTexts.OrderBy(kv => kv.Key))
+                {
+                    var page = kvp.Key;
+                    var text = kvp.Value;
+                    var estimatedTokens = text.Length / 4 + 1;
+                    if (usedChars + text.Length > maxTokens * 4)
+                        break;
+
+                    contextParts.Add($"[Page {page}]\n{text}");
+                    usedChars += text.Length;
+                }
+            }
+
+            citations.Add(new PageCitation(
+                node.Title,
+                docId,
+                node.StartPage ?? 0,
+                node.EndPage ?? 0));
+        }
+
+        return (string.Join("\n\n", contextParts), citations);
+    }
+
+    private static HashSet<int> CollectPageRange(TreeNode node)
+    {
+        var pages = new HashSet<int>();
+        if (node.StartPage.HasValue && node.EndPage.HasValue)
+        {
+            for (int p = node.StartPage.Value; p <= node.EndPage.Value; p++)
+                pages.Add(p);
+        }
+        return pages;
+    }
+
+    private static string BuildTruncatedSkeleton(
+        List<(string DocId, string TreeJson)> trees, int maxDepth)
+    {
         var lines = new List<string>();
         foreach (var (docId, treeJson) in trees)
         {
             var tree = JsonSerializer.Deserialize<DocumentTree>(treeJson)!;
-            lines.Add($"Document: {tree.FileName}");
-            BuildSkeletonLines(lines, tree.Children, "  ");
+            lines.Add($"Document: {tree.FileName} (doc_id={docId})");
+            BuildSkeletonLines(lines, tree.Children, "  ", 1, maxDepth);
             lines.Add("");
         }
-
         return string.Join("\n", lines);
     }
 
-    private static IEnumerable<(string nodeId, string text)> FlattenNodes(List<TreeNode> nodes)
+    private static void BuildSkeletonLines(
+        List<string> lines, List<TreeNode> nodes, string indent, int depth, int maxDepth)
     {
         foreach (var node in nodes)
         {
-            if (!string.IsNullOrWhiteSpace(node.Text))
-                yield return (node.NodeId, node.Text);
+            var pageInfo = node.StartPage.HasValue ? $" (pages {node.StartPage}-{node.EndPage})" : "";
+            lines.Add($"{indent}- {node.NodeId}: {node.Title}{pageInfo} — {node.Summary}");
 
-            foreach (var child in FlattenNodes(node.Children))
-                yield return child;
+            if (node.Children.Count > 0 && depth < maxDepth)
+                BuildSkeletonLines(lines, node.Children, indent + "  ", depth + 1, maxDepth);
         }
     }
 
-    private static string BuildSkeleton(DocumentTree tree)
-    {
-        var lines = new List<string> { $"Document: {tree.Title}" };
-        BuildSkeletonLines(lines, tree.Children, "  ");
-        return string.Join("\n", lines);
-    }
-
-    private static void BuildSkeletonLines(List<string> lines, List<TreeNode> nodes, string indent)
+    private static void CollectNodes(string docId, List<TreeNode> nodes, List<(string DocId, TreeNode Node)> result)
     {
         foreach (var node in nodes)
         {
-            lines.Add($"{indent}- {node.NodeId}: {node.Title} — {node.Summary}");
-            if (node.Children.Count > 0)
-                BuildSkeletonLines(lines, node.Children, indent + "  ");
+            result.Add((docId, node));
+            CollectNodes(docId, node.Children, result);
         }
     }
 
@@ -153,17 +205,5 @@ public class PageIndexService(
         {
             return [];
         }
-    }
-
-    private static List<TreeNode> FindCitations(List<TreeNode> nodes, List<string> nodeIds)
-    {
-        var results = new List<TreeNode>();
-        foreach (var node in nodes)
-        {
-            if (nodeIds.Contains(node.NodeId) && !string.IsNullOrWhiteSpace(node.Text))
-                results.Add(node);
-            results.AddRange(FindCitations(node.Children, nodeIds));
-        }
-        return results;
     }
 }
