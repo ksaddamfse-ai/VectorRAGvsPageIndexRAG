@@ -28,8 +28,8 @@ public class CompareController(
 
         await Task.WhenAll(ragTask, piTask);
 
-        var (ragData, ragError) = ragTask.Result;
-        var (piData, piError) = piTask.Result;
+        var (ragData, ragError) = await ragTask;
+        var (piData, piError) = await piTask;
 
         var collName = string.IsNullOrWhiteSpace(request.CollectionName) ? "documents" : request.CollectionName;
         return Ok(new CompareQueryResponse(

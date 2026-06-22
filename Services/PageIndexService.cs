@@ -19,9 +19,9 @@ public class PageIndexService(
         string groupName = "PDFs")
     {
         using var stream = file.OpenReadStream();
-        var text = documentProcessor.ExtractText(stream);
 
-        var tree = await treeBuilder.BuildTreeAsync(text, file.FileName, provider, model);
+        // ponytail: parse structure deterministically, LLM only for summaries
+        var tree = await treeBuilder.BuildTreeAsync(stream, file.FileName, provider, model);
         tree.GroupName = groupName;
 
         var treeJson = JsonSerializer.Serialize(tree);

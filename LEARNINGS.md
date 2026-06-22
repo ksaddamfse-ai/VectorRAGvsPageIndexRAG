@@ -53,14 +53,41 @@
 - The [VectorStoreVector] attribute requires Dimensions > 0 even though we override with definition at runtime. Workaround: set attribute to [VectorStoreVector(1)], definition overrides at EnsureCollectionExistsAsync
 - Use #pragma warning disable SKEXP0050 for TextChunker (experimental SK API)
 
-### 2026-06-21: SQLite Single-Connection Pattern
-- SqlitePageIndexDatabase: refactored from per-method connections → single connection held for DI singleton lifetime
-- **Why:** Multiple connections to same .db file caused "database is locked" errors (even with Pooling=False and WAL mode)
-- The singleton connection is opened in constructor via `Open()`, implementing `IDisposable` for cleanup
-- Registered as singleton in DI; DI manages disposal
-- Transactional writes (InsertDocumentTreeAsync, InsertNodeTextsAsync) use `_db.BeginTransaction()` on the shared connection
-- Connected reads (GetDocumentTreeJsonAsync, GetNodeTextsAsync) don't need explicit transactions
-- **Potential issue:** Long-running read queries block writes. If this becomes a problem, add WAL mode via `PRAGMA journal_mode=WAL` on startup.
+### ~~2026-06-21~~ 2026-06-22: SQLite Connection Pattern (Revised)
+- **CORRECTED:** Single-connection Singleton pattern was buggy — `Microsoft.Data.Sqlite.SqliteConnection` is NOT thread-safe. Concurrent `ExecuteNonQueryAsync` from two requests throws `InvalidOperationException` (re-entrant call), not just `SQLITE_BUSY`.
+- Fix: Remove shared `_db` instance. Open a new `SqliteConnection` per method call (connection pooling makes this cheap).
+- Connection string: `"Data Source={path};Cache=Shared;Busy Timeout=5000"` — `Cache=Shared` enables cross-connection visibility, `Busy Timeout=5000` retries transient locks.
+- `InitializeAsync` sets `PRAGMA journal_mode=WAL;` — writers no longer block readers (readers see snapshot, writer appends to separate WAL file).
+- Service stays as Singleton (DI lifetime) but is stateless — holds only connection string config, not a live connection.
+- Removed `IDisposable` from `IPageIndexDatabase` — no shared connection to dispose.
+
+### 2026-06-22: Token Budgeting in Query (Context Packing)
+- **Problem:** `RagQueryService.QueryAsync` concatenated all top-K chunks into prompt with no token limit check. A 500-page PDF + broad question could blow the model's context window silently.
+- **Fix:** Greedy packing by relevance score with hard token budget:
+  1. Budget = `modelContextWindow - systemPromptTokens - questionTokens - reservedOutputTokens - safetyMargin (~7%)`
+  2. Walk chunks sorted by similarity score descending, pack whole chunks until budget is exhausted
+  3. Skip (don't truncate) chunks that don't fit — partial sentences cost tokens without adding signal
+  4. Reorder: best chunk first, second-best last (mitigates "lost in the middle" — Liu et al., 2023)
+- Token counting via `Microsoft.ML.Tokenizers` (actual tokenizer per model family, not character estimation)
+- Model context windows stored in config under `ProviderContextWindows` — a `Dictionary<string, int>` mapping `"provider__model"` to context window size
+
+### 2026-06-22: Deterministic PDF Structure Parser (Replaces LLM Offsets)
+- **Problem:** LLMs cannot reliably estimate character offsets — they tokenize text into subwords, not characters. Title-based `IndexOf` also fails because titles repeat in prose.
+- **Solution:** Rule-based parsing using PdfPig font metadata:
+  1. `page.GetWords()` returns `Word` objects with `Letters[0].FontSize` (font size in unscaled PDF units)
+  2. Calculate median font size across all words
+  3. Section headers: font size ≥ 1.2× median (plus numbered patterns boost confidence)
+  4. Paragraphs: vertical gaps ≥ 1.5× line height between words
+  5. Nesting: font size ordering determines parent-child (smaller font = deeper nesting)
+- **Architecture:** `PdfStructureParser` does structure + text extraction; LLM only generates summaries (understanding, not structure)
+- **Benefits:** Deterministic, fast, no API calls for structure, works offline
+- **Tradeoff:** May miss semantic structure in PDFs with inconsistent fonts — fall back to spacing heuristics
+- **Production reference:** KohakuRAG (WattBot 2025 winner) uses same approach — PyMuPDF font heuristics for sections
+
+### 2026-06-22: CompareController Exception Resilience
+- `SafeRun<T>` helper wraps each query branch in try/catch, capturing exceptions as error strings
+- **Effect:** If Qdrant is down (RAG branch throws), the PageIndex result still survives — both results returned independently
+- Code smell (`.Result` on completed tasks) replaced with `await` for consistency
 
 ### 2026-06-21: Benchmark Results
 
@@ -87,6 +114,14 @@
      ```
   3. Solution gets a `Tests` solution folder with `NestedProjects`
 - Build now works with plain `dotnet build VectorRAGvsPageIndexRAG.sln` — no `--no-dependencies` needed
+
+### 2026-06-22: PdfPig Font Metadata API
+- `Word` class has `FontName` (string?) and `Letters` (IReadOnlyList<Letter>) but NOT `Font.Size`
+- To get font size: `word.Letters[0].FontSize` (from first letter)
+- `Letter.FontSize` is in unscaled PDF units — not points or pixels
+- `page.GetWords()` returns words in content stream order (may not be reading order)
+- For reading order: use `NearestNeighbourWordExtractor` from `UglyToad.PdfPig.DocumentLayoutAnalysis`
+- `BoundingBox` on `Word` is `PdfRectangle` with `.Left`, `.Top`, `.Bottom`, `.Right`
 
 ### 2026-06-20: EmbeddingGenerator API
 - IEmbeddingGenerator from Microsoft.Extensions.AI
