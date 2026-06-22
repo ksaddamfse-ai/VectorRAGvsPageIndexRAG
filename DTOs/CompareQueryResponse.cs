@@ -9,8 +9,10 @@ public record CompareQueryResponse(
 public record RagResult(
     string Answer,
     string CollectionName,
-    List<RagChunkResult> Chunks);
+    List<RagChunkResult> Chunks,
+    string? Error = null);
 
 public record PageIndexResult(
     string Answer,
-    List<PageIndexCitation> Citations);
+    List<PageIndexCitation> Citations,
+    string? Error = null);

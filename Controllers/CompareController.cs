@@ -23,19 +23,23 @@ public class CompareController(
         var ragReq = new RagQueryRequest(request.Question, request.Provider, request.Model, request.TopK, request.CollectionName);
         var piReq = new PageIndexQueryRequest(request.DocId, request.Question, request.Provider, request.Model);
 
-        var ragTask = ragQueryService.QueryAsync(ragReq);
-        var piTask = pageIndexService.QueryAsync(piReq);
+        var ragTask = SafeRun(() => ragQueryService.QueryAsync(ragReq));
+        var piTask = SafeRun(() => pageIndexService.QueryAsync(piReq));
 
         await Task.WhenAll(ragTask, piTask);
 
-        var ragResult = ragTask.Result;
-        var piResult = piTask.Result;
+        var (ragData, ragError) = ragTask.Result;
+        var (piData, piError) = piTask.Result;
 
         var collName = string.IsNullOrWhiteSpace(request.CollectionName) ? "documents" : request.CollectionName;
         return Ok(new CompareQueryResponse(
-            new RagResult(ragResult.Answer, collName, ragResult.Chunks),
-            new PageIndexResult(
-                piResult?.Answer ?? "Document not found.",
-                piResult?.Citations ?? [])));
+            new RagResult(ragError ?? ragData?.Answer ?? "No result.", collName, ragData?.Chunks ?? [], ragError),
+            new PageIndexResult(piError ?? piData?.Answer ?? "Document not found.", piData?.Citations ?? [], piError)));
+    }
+
+    private static async Task<(T? Result, string? Error)> SafeRun<T>(Func<Task<T>> action)
+    {
+        try { return (await action(), null); }
+        catch (Exception ex) { return (default, $"Failed: {ex.Message}"); }
     }
 }
