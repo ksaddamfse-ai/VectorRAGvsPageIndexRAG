@@ -14,94 +14,60 @@ PDF text is chunked, embedded into vectors, and stored in Qdrant. Queries embed 
 
 PDF structure is parsed deterministically using font heuristics (no LLM for layout). An LLM generates summaries for each node. The hierarchical tree is stored in SQLite. Queries use the LLM to navigate the tree skeleton, fetch relevant node texts, and answer.
 
-## Architecture Flow Diagrams
+## Flow Diagrams
 
-### Vector RAG — Ingestion Flow
-
-```mermaid
-flowchart TD
-    A[PDF Upload] --> B[PdfPig: Extract Text]
-    B --> C[SK TextChunker: Split into Paragraphs]
-    C --> D[IEmbeddingGenerator: Batch Embed Chunks]
-    D --> E[Qdrant: Upsert Vectors + Metadata]
-    E --> F[Return: ChunkCount, CollectionName]
-
-    style A fill:#dae8fc,stroke:#6c8ebf
-    style D fill:#d5e8d4,stroke:#82b366
-    style E fill:#f5f5f5,stroke:#666666
-```
-
-### Vector RAG — Query Flow
-
-```mermaid
-flowchart TD
-    A[Question] --> B[IEmbeddingGenerator: Embed Question]
-    B --> C[Qdrant: Cosine Search — Top-K Chunks]
-    C --> D{Chunks Found?}
-    D -->|No| E[Return: No relevant context]
-    D -->|Yes| F[PackChunks: Token Budget Greedy Fill]
-    F --> G[IChatClient: LLM Answer with Context]
-    G --> H[Return: Answer + Chunks with Scores]
-
-    style A fill:#dae8fc,stroke:#6c8ebf
-    style B fill:#d5e8d4,stroke:#82b366
-    style C fill:#f5f5f5,stroke:#666666
-    style G fill:#fff2cc,stroke:#d6b656
-```
-
-### Page Index RAG — Ingestion Flow
-
-```mermaid
-flowchart TD
-    A[PDF Upload] --> B[PdfStructureParser: Font Heuristics]
-    B --> C{Headers Detected?}
-    C -->|Yes| D[Build Hierarchical Tree: Sections + Paragraphs]
-    C -->|No| E[Single Node: Full Document Text]
-    D --> F[DocumentTreeBuilder: LLM Summaries per Node]
-    E --> F
-    F --> G[SQLite: Store tree_json + node_texts]
-    G --> H[Return: DocId, FileName, PageCount]
-
-    style A fill:#dae8fc,stroke:#6c8ebf
-    style B fill:#e1d5e7,stroke:#9673a6
-    style F fill:#fff2cc,stroke:#d6b656
-    style G fill:#f5f5f5,stroke:#666666
-```
-
-### Page Index RAG — Query Flow
-
-```mermaid
-flowchart TD
-    A[Question + GroupName] --> B[SQLite: Load All Trees for Group]
-    B --> C[Build Skeleton: Node Titles + Summaries]
-    C --> D[LLM Navigation: Question → Relevant Node IDs]
-    D --> E[SQLite: Fetch Node Texts by ID]
-    E --> F{Texts Found?}
-    F -->|No| G[Return: No relevant sections]
-    F -->|Yes| H[LLM Answer: Context + Question]
-    H --> I[Return: Answer + Citations]
-
-    style A fill:#dae8fc,stroke:#6c8ebf
-    style D fill:#fff2cc,stroke:#d6b656
-    style E fill:#f5f5f5,stroke:#666666
-    style H fill:#d5e8d4,stroke:#82b366
-```
-
-### Compare Endpoint — Side-by-Side
+### Vector RAG Ingestion
 
 ```mermaid
 flowchart LR
-    A[Question] --> B[Vector RAG Pipeline]
-    A --> C[PageIndex Pipeline]
-    B --> D[Embed → Search Qdrant → LLM]
-    C --> E[Load Trees → LLM Navigate → LLM Answer]
-    D --> F[CompareQueryResponse]
-    E --> F
+    A[PDF] --> B[PdfPig\nExtract Text]
+    B --> C[TextChunker\nSplit Paragraphs]
+    C --> D[Embedder\nBatch Embed]
+    D --> E[(Qdrant\nVectors + Metadata)]
+```
 
-    style A fill:#dae8fc,stroke:#6c8ebf
-    style B fill:#d5e8d4,stroke:#82b366
-    style C fill:#e1d5e7,stroke:#9673a6
-    style F fill:#fff2cc,stroke:#d6b656
+### Vector RAG Query
+
+```mermaid
+flowchart LR
+    A[Question] --> B[Embedder\nEmbed Question]
+    B --> C[Qdrant\nCosine Search]
+    C --> D[PackChunks\nToken Budget]
+    D --> E[LLM\nAnswer with Context]
+```
+
+### Page Index Ingestion
+
+```mermaid
+flowchart LR
+    A[PDF] --> B[PdfStructureParser\nFont Heuristics]
+    B --> C[DocumentTreeBuilder\nLLM Summaries]
+    C --> D[(SQLite\ntree_json + node_texts)]
+```
+
+### Page Index Query
+
+```mermaid
+flowchart LR
+    A[Question] --> B[LLM\nNavigate Skeleton]
+    B --> C[SQLite\nFetch Node Texts]
+    C --> D[LLM\nAnswer with Context]
+```
+
+### Compare Endpoint
+
+```mermaid
+flowchart LR
+    A[Question] --> B[Vector RAG]
+    A --> C[PageIndex RAG]
+    B --> D[(Qdrant)]
+    B --> E[LLM]
+    C --> F[(SQLite)]
+    C --> G[LLM x2]
+    D --> H[Response\n+ Timing]
+    E --> H
+    F --> H
+    G --> H
 ```
 
 ## Endpoints
@@ -112,7 +78,7 @@ flowchart LR
 | `GET` | `/api/rag/query` | Vector: embed question, search, LLM answer |
 | `POST` | `/api/pageindex/documents` | PageIndex: deterministic parse + LLM summaries, store in SQLite |
 | `GET` | `/api/pageindex/query` | PageIndex: LLM navigates tree, fetches sections, answers |
-| `GET` | `/api/compare/query` | Compare both strategies side-by-side |
+| `GET` | `/api/compare/query` | Compare both strategies side-by-side with timing |
 
 ## Quick Start
 
@@ -171,20 +137,20 @@ curl -X 'GET' \
 
 Run against `test-pdfs/` using OpenCode / `deepseek-v4-flash-free`:
 
-| Question | Vector RAG (ms) | PageIndex RAG (ms) | Vector Answer | PageIndex Answer |
-|----------|----------------:|--------------------:|---------------|------------------|
-| What is the CloudSync API rate limit? | 25,556 | 25,556 | Free: 100/min, Pro: 1,000/min, Enterprise: 10,000/min, Premium: 50,000/min | 1000 requests per minute per client ID |
-| What programming languages does the candidate know? | 11,881 | 11,881 | Python, Java, C++, R, SQL, JavaScript, Go | Context does not contain information about programming languages |
-| What are the termination clauses? | 77,069 | 77,069 | Section 5.1: Agreement continues for Subscription Term. Section 5.2: Either party may terminate for cause upon 30 days notice | Section 5.1: Agreement commences on Effective Date. Section 5.2: Either party may terminate for material breach |
-| Compare performance metrics across sections | 110,473 | 110,473 | ML Engineer: 95% accuracy, 40% latency reduction. Data Scientist: 89% AUC churn model | Rate Limiting: 100-50,000 req/min by tier. Throughput: 10M+ daily users. Latency: 40% reduction via TensorRT |
-| What is the meaning of life? | 7,977 | 7,977 | No information about the meaning of life in context | No relevant sections found |
+| Question | Vector RAG (ms) | PageIndex (ms) | Vector Answer | PageIndex Answer |
+|----------|----------------:|---------------:|---------------|------------------|
+| What is the CloudSync API rate limit? | 10,306 | 160,873 | Free: 100/min, Pro: 1,000/min, Enterprise: 10,000/min, Premium: 50,000/min | 1000 requests per minute per client ID |
+| What programming languages does the candidate know? | 4,780 | 23,779 | Python, Java, C++, R, SQL, JavaScript, Go | Context does not contain information about programming languages |
+| What are the termination clauses? | 19,351 | 86,677 | Section 5.1: Agreement continues for Subscription Term. Section 5.2: Either party may terminate for cause upon 30 days notice | Section 5.1: Agreement commences on Effective Date. Section 5.2: Either party may terminate for material breach |
+| Compare performance metrics across sections | 63,762 | 174,437 | ML Engineer: 95% accuracy, 40% latency reduction. Data Scientist: 89% AUC churn model | Rate Limiting: 100-50,000 req/min by tier. Throughput: 10M+ daily users. Latency: 40% reduction via TensorRT |
+| What is the meaning of life? | 5,214 | 4,290 | No information about the meaning of life in context | No relevant sections found |
 
 ### Key Observations
 
 | Aspect | Vector RAG | Page Index RAG |
 |--------|------------|----------------|
 | **Ingestion speed** | Fast (~1-2s per PDF) | Slow (~90-215s per PDF, LLM per node) |
-| **Query latency** | 8-110s (embed + search + LLM) | 8-110s (2 LLM calls: navigate + answer) |
+| **Query latency** | 5-64s (embed + search + LLM) | 4-175s (2 LLM calls: navigate + answer) |
 | **Factual accuracy** | Good — retrieves exact chunks | Good — navigates to correct sections |
 | **Multi-document queries** | Struggles (chunks from all docs mixed) | Better (tree structure preserved per doc) |
 | **Out-of-scope handling** | Gracefully says "no info" | Gracefully says "no relevant sections" |

@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using Microsoft.AspNetCore.Mvc;
 using VectorRAGvsPageIndexRAG.DTOs;
 using VectorRAGvsPageIndexRAG.Services.Interfaces;
@@ -23,23 +24,36 @@ public class CompareController(
         var ragReq = new RagQueryRequest(request.Question, request.Provider, request.Model, request.TopK, request.CollectionName);
         var piReq = new PageIndexQueryRequest(request.Question, request.Provider, request.Model, request.GroupName);
 
+        var totalSw = Stopwatch.StartNew();
         var ragTask = SafeRun(() => ragQueryService.QueryAsync(ragReq));
         var piTask = SafeRun(() => pageIndexService.QueryAsync(piReq));
 
         await Task.WhenAll(ragTask, piTask);
+        totalSw.Stop();
 
-        var (ragData, ragError) = await ragTask;
-        var (piData, piError) = await piTask;
+        var (ragData, ragError, ragMs) = await ragTask;
+        var (piData, piError, piMs) = await piTask;
 
         var collName = string.IsNullOrWhiteSpace(request.CollectionName) ? "documents" : request.CollectionName;
         return Ok(new CompareQueryResponse(
-            new RagResult(ragError ?? ragData?.Answer ?? "No result.", collName, ragData?.Chunks ?? [], ragError),
-            new PageIndexResult(piError ?? piData?.Answer ?? "Document not found.", piData?.Citations ?? [], piError)));
+            new RagResult(ragError ?? ragData?.Answer ?? "No result.", collName, ragData?.Chunks ?? [], ragError, ragMs),
+            new PageIndexResult(piError ?? piData?.Answer ?? "Document not found.", piData?.Citations ?? [], piError, piMs),
+            totalSw.ElapsedMilliseconds));
     }
 
-    private static async Task<(T? Result, string? Error)> SafeRun<T>(Func<Task<T>> action)
+    private static async Task<(T? Result, string? Error, long TimeMs)> SafeRun<T>(Func<Task<T>> action)
     {
-        try { return (await action(), null); }
-        catch (Exception ex) { return (default, $"Failed: {ex.Message}"); }
+        var sw = Stopwatch.StartNew();
+        try
+        {
+            var result = await action();
+            sw.Stop();
+            return (result, null, sw.ElapsedMilliseconds);
+        }
+        catch (Exception ex)
+        {
+            sw.Stop();
+            return (default, $"Failed: {ex.Message}", sw.ElapsedMilliseconds);
+        }
     }
 }
