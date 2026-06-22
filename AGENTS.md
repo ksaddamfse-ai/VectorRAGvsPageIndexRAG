@@ -78,6 +78,35 @@ Always use PDFs from `test-pdfs/` when testing endpoints:
 
 Generated via: `dotnet run --project Tools/PdfGenerator/VectorRAGvsPageIndexRAG.Tools.PdfGenerator.csproj`
 
+## Curl Examples
+
+Always use PDFs from `test-pdfs/` when testing endpoints.
+
+**RAG Ingest (Vector RAG):**
+```bash
+curl -X 'POST' \
+  'https://localhost:51095/api/rag/documents?collectionName=PDFs' \
+  -H 'accept: text/plain' \
+  -H 'Content-Type: multipart/form-data' \
+  -F 'file=@test-pdfs/technical-report.pdf;type=application/pdf'
+```
+
+**PageIndex Ingest (Deterministic PDF parser + LLM summaries):**
+```bash
+curl -X 'POST' \
+  'https://localhost:51095/api/pageindex/documents?provider=OpenCode&model=deepseek-v4-flash-free&groupName=PDFs' \
+  -H 'accept: text/plain' \
+  -H 'Content-Type: multipart/form-data' \
+  -F 'file=@test-pdfs/technical-report.pdf;type=application/pdf'
+```
+
+**Compare Query (runs both approaches side-by-side):**
+```bash
+curl -X 'GET' \
+  'https://localhost:51095/api/compare/query?question=What%20is%20the%20CloudSync%20API%20rate%20limit%3F&provider=OpenCode&model=deepseek-v4-flash-free&groupName=PDFs&collectionName=PDFs' \
+  -H 'accept: text/plain'
+```
+
 ## Build
 
 - Target: net10.0
