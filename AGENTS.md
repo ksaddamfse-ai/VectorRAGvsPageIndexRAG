@@ -14,6 +14,8 @@ Services/             — Application services + interfaces
   Interfaces/         — Service abstractions
 Settings/             — Configuration models
 Filters/              — Swagger filters
+Tools/PdfGenerator/   — Test PDF generator (standalone console app)
+test-pdfs/            — Sample PDFs for testing (commit these)
 ```
 
 ## Key Services
@@ -24,6 +26,8 @@ Filters/              — Swagger filters
 | `IRagQueryService` | `RagQueryService` | question → embed → Qdrant search → LLM answer |
 | `IDocumentProcessor` | `DocumentProcessor` | PDF text extraction via PdfPig |
 | `IChatClientFactory` | `ChatClientFactory` | Keyed IChatClient resolution |
+| `PdfStructureParser` | `PdfStructureParser` | Deterministic PDF structure via font heuristics |
+| `DocumentTreeBuilder` | `DocumentTreeBuilder` | Parser + LLM summaries → DocumentTree |
 
 ## Key Design Decisions
 
@@ -33,18 +37,46 @@ Filters/              — Swagger filters
 - Reuses `IChatClientFactory` from existing infrastructure
 - Qdrant.Client directly (no IVectorStore abstraction — YAGNI until second provider)
 - Port 6334 for gRPC (not 6333 which is HTTP REST)
+- **Deterministic PDF parsing**: Font size heuristics (≥1.2× median = header), vertical gaps (≥1.5× line height = paragraph). LLM only generates summaries.
+- **Endpoint simplification**: PageIndex/Compare use `GroupName` (default "PDFs"), not `DocId`
+- **Swagger defaults**: Provider = "GoogleAI", Model = "gemini-3.5-flash"
+- **GoogleAI model**: Must pass `($"models/{chatModel}")` to `GenerativeAIChatClient` constructor
 
 ## DI Registration (Program.cs)
 
 - Keyed `IChatClient` per provider/model from `ProviderRegistry`
 - Default `IEmbeddingGenerator` singleton from `EmbeddingRegistry.ActiveEmbeddingProvider`
 - `QdrantClient` singleton from `VectorStoreRegistry.ActiveProvider`
+- `PdfStructureParser` singleton
 - Application services registered as singletons via interfaces
 
 ## Config
 
-- `appsettings.json` has ProviderRegistry, EmbeddingRegistry, VectorStoreRegistry
+- `appsettings.json` has ProviderRegistry, EmbeddingRegistry, VectorStoreRegistry, ProviderContextWindows
 - API keys via dotnet user-secrets or appsettings
+- Default collection: "PDFs" (RAG and PageIndex)
+
+## Endpoints
+
+| Method | Path | Purpose |
+|--------|------|---------|
+| POST | `/api/rag/documents` | Ingest PDF to Vector RAG |
+| GET | `/api/rag/query` | Query Vector RAG |
+| POST | `/api/pageindex/documents` | Ingest PDF to PageIndex |
+| GET | `/api/pageindex/query` | Query PageIndex (by groupName) |
+| GET | `/api/compare/query` | Compare both RAG approaches |
+
+## Test PDFs
+
+Always use PDFs from `test-pdfs/` when testing endpoints:
+
+| File | Pages | Content |
+|------|-------|---------|
+| `test-pdfs/technical-report.pdf` | 10 | CloudSync API docs (sections, tables, code) |
+| `test-pdfs/resume.pdf` | 5 | Dr. Sarah Chen ML engineer CV (skills, experience) |
+| `test-pdfs/legal-contract.pdf` | 9 | Enterprise software license (clauses, GDPR) |
+
+Generated via: `dotnet run --project Tools/PdfGenerator/VectorRAGvsPageIndexRAG.Tools.PdfGenerator.csproj`
 
 ## Build
 
@@ -53,7 +85,8 @@ Filters/              — Swagger filters
 - `dotnet test Tests\VectorRAGvsPageIndexRAG.Tests\VectorRAGvsPageIndexRAG.Tests.csproj` to run tests
 - `dotnet run` to serve at localhost:51095
 - Test project lives under `Tests\` to avoid Web SDK glob picking up test `.cs` files; main `.csproj` has `<Compile Remove="Tests\**\*">`
+- PDF generator lives under `Tools\` — excluded from main project via `<Compile Remove="Tools\**\*">`
 
 ## Learnings
 
-Record all provider integration decisions and design choices in LEARNINGS.md � why a specific NuGet package was chosen, what alternatives existed, and any config/code implications. This keeps design rationale discoverable and prevents repeated deliberation.
+Record all provider integration decisions and design choices in LEARNINGS.md — why a specific NuGet package was chosen, what alternatives existed, and any config/code implications. This keeps design rationale discoverable and prevents repeated deliberation.
