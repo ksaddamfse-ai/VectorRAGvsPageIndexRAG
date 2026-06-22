@@ -7,23 +7,33 @@ using System.Text.Json;
 
 namespace VectorRAGvsPageIndexRAG.Services;
 
-public class SqlitePageIndexDatabase : IPageIndexDatabase, IDisposable
+public class SqlitePageIndexDatabase : IPageIndexDatabase
 {
-    private readonly SqliteConnection _db;
+    private readonly string _connectionString;
 
     public SqlitePageIndexDatabase(IOptions<PageIndexSettings> settings)
     {
-        var connStr = $"Data Source={settings.Value.DbPath}";
-        _db = new SqliteConnection(connStr);
-        _db.Open();
+        _connectionString = $"Data Source={settings.Value.DbPath};Cache=Shared";
     }
 
-    public void Dispose() => _db.Dispose();
+    private SqliteConnection CreateConnection()
+    {
+        var conn = new SqliteConnection(_connectionString);
+        conn.Open();
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = "PRAGMA busy_timeout=5000;";
+        cmd.ExecuteNonQuery();
+        return conn;
+    }
 
     public async Task InitializeAsync()
     {
-        var initCmd = _db.CreateCommand();
-        initCmd.CommandText = """
+        using var conn = CreateConnection();
+        var cmd = conn.CreateCommand();
+        cmd.CommandText = "PRAGMA journal_mode=WAL;";
+        await cmd.ExecuteNonQueryAsync();
+
+        cmd.CommandText = """
             CREATE TABLE IF NOT EXISTS document_trees (
                 doc_id TEXT PRIMARY KEY,
                 file_name TEXT NOT NULL,
@@ -39,14 +49,15 @@ public class SqlitePageIndexDatabase : IPageIndexDatabase, IDisposable
                 PRIMARY KEY (doc_id, node_id)
             );
             """;
-        await initCmd.ExecuteNonQueryAsync();
+        await cmd.ExecuteNonQueryAsync();
     }
 
     public async Task InsertDocumentTreeAsync(DocumentTree tree, string treeJson)
     {
-        using var tx = _db.BeginTransaction();
+        using var conn = CreateConnection();
+        using var tx = conn.BeginTransaction();
 
-        var insertTree = _db.CreateCommand();
+        var insertTree = conn.CreateCommand();
         insertTree.CommandText = """
             INSERT INTO document_trees (doc_id, file_name, tree_json, group_name)
             VALUES ($id, $name, $json, $group)
@@ -62,7 +73,8 @@ public class SqlitePageIndexDatabase : IPageIndexDatabase, IDisposable
 
     public async Task InsertNodeTextAsync(string docId, string nodeId, string text)
     {
-        var insertText = _db.CreateCommand();
+        using var conn = CreateConnection();
+        var insertText = conn.CreateCommand();
         insertText.CommandText = """
             INSERT OR IGNORE INTO node_texts (doc_id, node_id, text)
             VALUES ($docId, $nodeId, $text)
@@ -75,9 +87,10 @@ public class SqlitePageIndexDatabase : IPageIndexDatabase, IDisposable
 
     public async Task InsertNodeTextsAsync(string docId, IEnumerable<(string nodeId, string text)> nodeTexts)
     {
-        using var tx = _db.BeginTransaction();
+        using var conn = CreateConnection();
+        using var tx = conn.BeginTransaction();
 
-        var insertText = _db.CreateCommand();
+        var insertText = conn.CreateCommand();
         insertText.CommandText = """
             INSERT OR IGNORE INTO node_texts (doc_id, node_id, text)
             VALUES ($docId, $nodeId, $text)
@@ -105,17 +118,17 @@ public class SqlitePageIndexDatabase : IPageIndexDatabase, IDisposable
 
     public async Task<string?> GetDocumentTreeJsonAsync(string docId)
     {
-        var cmd = _db.CreateCommand();
+        using var conn = CreateConnection();
+        var cmd = conn.CreateCommand();
         cmd.CommandText = "SELECT tree_json FROM document_trees WHERE doc_id = $id";
         cmd.Parameters.AddWithValue("$id", docId);
-        var json = await cmd.ExecuteScalarAsync() as string;
-
-        return json;
+        return await cmd.ExecuteScalarAsync() as string;
     }
 
     public async Task<List<(string DocId, string TreeJson)>> GetDocumentTreesByGroupAsync(string groupName)
     {
-        var cmd = _db.CreateCommand();
+        using var conn = CreateConnection();
+        var cmd = conn.CreateCommand();
         cmd.CommandText = "SELECT doc_id, tree_json FROM document_trees WHERE group_name = $group ORDER BY created_at";
         cmd.Parameters.AddWithValue("$group", groupName);
 
@@ -128,7 +141,8 @@ public class SqlitePageIndexDatabase : IPageIndexDatabase, IDisposable
 
     public async Task<Dictionary<string, string>> GetNodeTextsAsync(string docId, List<string> nodeIds)
     {
-        var selectText = _db.CreateCommand();
+        using var conn = CreateConnection();
+        var selectText = conn.CreateCommand();
         var placeholders = string.Join(",", nodeIds.Select((_, i) => $"$id{i}"));
         selectText.CommandText = $"SELECT node_id, text FROM node_texts WHERE doc_id = $docId AND node_id IN ({placeholders})";
         selectText.Parameters.AddWithValue("$docId", docId);
@@ -145,7 +159,8 @@ public class SqlitePageIndexDatabase : IPageIndexDatabase, IDisposable
 
     public async Task<Dictionary<string, string>> GetNodeTextsByNodeIdsAsync(List<string> nodeIds)
     {
-        var selectText = _db.CreateCommand();
+        using var conn = CreateConnection();
+        var selectText = conn.CreateCommand();
         var placeholders = string.Join(",", nodeIds.Select((_, i) => $"$id{i}"));
         selectText.CommandText = $"SELECT node_id, text FROM node_texts WHERE node_id IN ({placeholders})";
         for (int i = 0; i < nodeIds.Count; i++)

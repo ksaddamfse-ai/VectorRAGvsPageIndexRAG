@@ -14,7 +14,7 @@ public class RagController(
     [HttpPost("documents")]
     [ProducesResponseType<RagIngestionResponse>(StatusCodes.Status201Created)]
     [ProducesResponseType<string>(StatusCodes.Status400BadRequest)]
-    public async Task<IActionResult> Ingest(IFormFile file, [FromQuery] string? collectionName = null)
+    public async Task<IActionResult> Ingest(IFormFile file, [FromQuery] string collectionName = "PDFs")
     {
         if (file == null || file.Length == 0)
             return BadRequest("No file provided.");
@@ -24,7 +24,7 @@ public class RagController(
 
         using var stream = file.OpenReadStream();
         var text = documentProcessor.ExtractText(stream);
-        var result = await ingestionService.IngestAsync(text, file.FileName, collectionName ?? "");
+        var result = await ingestionService.IngestAsync(text, file.FileName, collectionName);
 
         return CreatedAtAction(nameof(Ingest), new RagIngestionResponse(
             result.FileName,

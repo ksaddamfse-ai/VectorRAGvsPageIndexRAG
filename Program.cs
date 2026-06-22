@@ -48,13 +48,15 @@ foreach (var providerSection in builder.Configuration.GetSection("ProviderRegist
                 new ApiKeyCredential(providerSection["ApiKey"]!))
                 .GetChatClient(chatModel).AsIChatClient(),
 
-            "Anthropic" => new AnthropicClient { ApiKey = providerSection["ApiKey"]! }
+            "Anthropic" => new AnthropicClient { ApiKey = providerSection["ApiKey"] ?? "not-needed" }
                 .AsIChatClient(chatModel),
 
-            "GoogleAI" => new GenerativeAIChatClient(providerSection["ApiKey"]!),
+            "GoogleAI" => new GenerativeAIChatClient(
+                providerSection["ApiKey"] ?? "not-needed",
+                $"models/{chatModel}"),
 
             _ => new OpenAIClient(
-                new ApiKeyCredential(providerSection["ApiKey"] ?? "not-needed"),
+                new ApiKeyCredential(string.IsNullOrEmpty(providerSection["ApiKey"]) ? "not-needed" : providerSection["ApiKey"]!),
                 new OpenAIClientOptions { Endpoint = new Uri(providerSection["BaseUrl"]!) })
                 .GetChatClient(chatModel).AsIChatClient()
         });
@@ -77,7 +79,7 @@ builder.Services.AddEmbeddingGenerator(_ => activeEmbeddingProviderSection["Type
         .GetEmbeddingClient(activeEmbeddingModel).AsIEmbeddingGenerator(),
 
     _ => new OpenAIClient(
-        new ApiKeyCredential(activeEmbeddingProviderSection["ApiKey"] ?? ""),
+        new ApiKeyCredential(string.IsNullOrEmpty(activeEmbeddingProviderSection["ApiKey"]) ? "not-needed" : activeEmbeddingProviderSection["ApiKey"]!),
         new OpenAIClientOptions { Endpoint = new Uri(activeEmbeddingProviderSection["BaseUrl"]!) })
         .GetEmbeddingClient(activeEmbeddingModel).AsIEmbeddingGenerator()
 });
@@ -110,11 +112,16 @@ builder.Services.AddSingleton<IRagQueryService, RagQueryService>();
 
 // ── PageIndex (Vectorless RAG) services ──
 builder.Services.Configure<PageIndexSettings>(builder.Configuration.GetSection("PageIndex"));
+builder.Services.AddSingleton<PdfStructureParser>();
 builder.Services.AddSingleton<DocumentTreeBuilder>();
 builder.Services.AddSingleton<IPageIndexDatabase, SqlitePageIndexDatabase>();
 builder.Services.AddSingleton<IPageIndexService, PageIndexService>();
 
 var app = builder.Build();
+
+// ponytail: single startup call, table creation is idempotent (IF NOT EXISTS)
+var dbInit = app.Services.GetRequiredService<IPageIndexDatabase>();
+await dbInit.InitializeAsync();
 
 if (app.Environment.IsDevelopment())
 {

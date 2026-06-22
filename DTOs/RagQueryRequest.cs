@@ -5,4 +5,4 @@ public record RagQueryRequest(
     string Provider,
     string Model,
     int TopK = 2,
-    string CollectionName = "");
+    string CollectionName = "PDFs");

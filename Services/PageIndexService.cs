@@ -19,9 +19,9 @@ public class PageIndexService(
         string groupName = "PDFs")
     {
         using var stream = file.OpenReadStream();
-        var text = documentProcessor.ExtractText(stream);
 
-        var tree = await treeBuilder.BuildTreeAsync(text, file.FileName, provider, model);
+        // ponytail: parse structure deterministically, LLM only for summaries
+        var tree = await treeBuilder.BuildTreeAsync(stream, file.FileName, provider, model);
         tree.GroupName = groupName;
 
         var treeJson = JsonSerializer.Serialize(tree);
@@ -39,23 +39,9 @@ public class PageIndexService(
 
     public async Task<PageIndexQueryResponse?> QueryAsync(PageIndexQueryRequest request)
     {
-        string skeleton;
-
-        DocumentTree? singleTree = null;
-        if (!string.IsNullOrWhiteSpace(request.GroupName))
-        {
-            skeleton = await BuildCombinedSkeletonAsync(request.GroupName);
-            if (string.IsNullOrWhiteSpace(skeleton))
-                return null;
-        }
-        else
-        {
-            var json = await database.GetDocumentTreeJsonAsync(request.DocId);
-            if (json is null)
-                return null;
-            singleTree = JsonSerializer.Deserialize<DocumentTree>(json)!;
-            skeleton = BuildSkeleton(singleTree);
-        }
+        var skeleton = await BuildCombinedSkeletonAsync(request.GroupName);
+        if (string.IsNullOrWhiteSpace(skeleton))
+            return null;
 
         var client = clientFactory.GetClient($"{request.Provider}__{request.Model}")
             ?? throw new InvalidOperationException(
@@ -83,10 +69,7 @@ public class PageIndexService(
             return new PageIndexQueryResponse("No relevant sections found.", []);
 
         Dictionary<string, string> selectedTexts;
-        if (!string.IsNullOrWhiteSpace(request.GroupName))
-            selectedTexts = await database.GetNodeTextsByNodeIdsAsync(nodeIds);
-        else
-            selectedTexts = await database.GetNodeTextsAsync(request.DocId, nodeIds);
+        selectedTexts = await database.GetNodeTextsByNodeIdsAsync(nodeIds);
 
         if (selectedTexts.Count == 0)
             return new PageIndexQueryResponse("No relevant sections found.", []);
@@ -105,14 +88,7 @@ public class PageIndexService(
         var answerResponse = await client.GetResponseAsync(answerPrompt);
 
         // ponytail: group queries skip citations — needs per-doc tree structure
-        if (!string.IsNullOrWhiteSpace(request.GroupName))
-            return new PageIndexQueryResponse(answerResponse?.Text ?? "No answer generated.", []);
-
-        var citations = FindCitations(singleTree!.Children, nodeIds)
-            .Select(n => new PageIndexCitation(n.Title, 0, n.Text))
-            .ToList();
-
-        return new PageIndexQueryResponse(answerResponse?.Text ?? "No answer generated.", citations);
+        return new PageIndexQueryResponse(answerResponse?.Text ?? "No answer generated.", []);
     }
 
     private async Task<string> BuildCombinedSkeletonAsync(string groupName)

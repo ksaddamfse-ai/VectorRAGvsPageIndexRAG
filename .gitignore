@@ -484,8 +484,10 @@ $RECYCLE.BIN/
 # Vim temporary swap files
 *.swp
 
-# SQLite database files (generated at runtime)
+# SQLite database files and WAL artifacts (generated at runtime)
 *.db
+*.db-wal
+*.db-shm
 
 # Server log files
 svr*.log
