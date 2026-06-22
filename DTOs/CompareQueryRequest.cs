@@ -6,4 +6,5 @@ public record CompareQueryRequest(
     string Provider,
     string Model,
     int TopK,
-    string CollectionName = "");
+    string CollectionName = "",
+    string GroupName = "");

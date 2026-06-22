@@ -4,4 +4,5 @@ public record PageIndexQueryRequest(
     string DocId,
     string Question,
     string Provider,
-    string Model);
+    string Model,
+    string GroupName = "");

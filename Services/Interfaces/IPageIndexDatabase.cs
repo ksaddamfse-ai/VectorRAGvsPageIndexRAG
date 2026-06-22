@@ -12,7 +12,11 @@ public interface IPageIndexDatabase
 
     Task InsertNodeTextsAsync(string docId, IEnumerable<(string nodeId, string text)> nodeTexts);
 
+    Task<List<(string DocId, string TreeJson)>> GetDocumentTreesByGroupAsync(string groupName);
+
     Task<string?> GetDocumentTreeJsonAsync(string docId);
 
     Task<Dictionary<string, string>> GetNodeTextsAsync(string docId, List<string> nodeIds);
+
+    Task<Dictionary<string, string>> GetNodeTextsByNodeIdsAsync(List<string> nodeIds);
 }

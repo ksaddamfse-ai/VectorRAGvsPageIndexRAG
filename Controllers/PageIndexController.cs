@@ -14,7 +14,8 @@ public class PageIndexController(IPageIndexService pageIndexService) : Controlle
     public async Task<IActionResult> Ingest(
         IFormFile file,
         [FromQuery] string provider = "NvidiaNim",
-        [FromQuery] string model = "meta/llama-3.3-70b-instruct")
+        [FromQuery] string model = "meta/llama-3.3-70b-instruct",
+        [FromQuery] string groupName = "PDFs")
     {
         if (file == null || file.Length == 0)
             return BadRequest("No file provided.");
@@ -22,7 +23,7 @@ public class PageIndexController(IPageIndexService pageIndexService) : Controlle
         if (!file.FileName.EndsWith(".pdf", StringComparison.OrdinalIgnoreCase))
             return BadRequest("Only PDF files are supported.");
 
-        var result = await pageIndexService.IngestAsync(file, provider, model);
+        var result = await pageIndexService.IngestAsync(file, provider, model, groupName);
         return CreatedAtAction(nameof(Ingest), result);
     }
 
@@ -32,8 +33,8 @@ public class PageIndexController(IPageIndexService pageIndexService) : Controlle
     [ProducesResponseType<string>(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> Query([FromQuery] PageIndexQueryRequest request)
     {
-        if (string.IsNullOrWhiteSpace(request.DocId))
-            return BadRequest("docId is required.");
+        if (string.IsNullOrWhiteSpace(request.DocId) && string.IsNullOrWhiteSpace(request.GroupName))
+            return BadRequest("docId or groupName is required.");
 
         if (string.IsNullOrWhiteSpace(request.Question))
             return BadRequest("Question is required.");
@@ -41,7 +42,7 @@ public class PageIndexController(IPageIndexService pageIndexService) : Controlle
         var result = await pageIndexService.QueryAsync(request);
 
         if (result is null)
-            return NotFound("Document not found.");
+            return NotFound("Document(s) not found.");
 
         return Ok(result);
     }
