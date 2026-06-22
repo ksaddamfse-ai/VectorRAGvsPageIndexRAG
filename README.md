@@ -171,7 +171,7 @@ Run against `test-pdfs/` using OpenCode / `deepseek-v4-flash-free`:
 
 - **Deterministic PDF parsing**: Font size heuristics (>=1.2x median = header), vertical gaps (>=1.5x line height = paragraph). LLM only generates summaries.
 - **SQLite over a second vector DB**: PageIndex uses SQLite — zero external infra. Tree navigation via LLM reasoning, not similarity search.
-- **No IVectorStore abstraction (YAGNI)**: Qdrant.Client directly until a second provider is needed.
+- **MEVD abstraction**: Uses `VectorStore` from Microsoft.Extensions.VectorData — swapping vector DBs means changing one DI registration, not rewriting services.
 - **gRPC port 6334**: Qdrant gRPC is on 6334, not 6333 (HTTP REST).
 - **Vector size derived from embedding output**: No config duplication — embedding model determines vector size at runtime.
 - **Token budgeting**: `PackChunks()` uses greedy fill with char-count estimation (`text.Length / 4`) to fit context into model window.

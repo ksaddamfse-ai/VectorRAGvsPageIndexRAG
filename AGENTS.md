@@ -35,7 +35,7 @@ test-pdfs/            — Sample PDFs for testing (commit these)
 - Vector size derived from actual embedding output at runtime (not in config)
 - Qdrant collection auto-created with correct vector size on first ingest
 - Reuses `IChatClientFactory` from existing infrastructure
-- Qdrant.Client directly (no IVectorStore abstraction — YAGNI until second provider)
+- Qdrant.Client via MEVD abstraction (`VectorStore` base class from Microsoft.Extensions.VectorData)
 - Port 6334 for gRPC (not 6333 which is HTTP REST)
 - **Deterministic PDF parsing**: Font size heuristics (≥1.2× median = header), vertical gaps (≥1.5× line height = paragraph). LLM only generates summaries.
 - **Endpoint simplification**: PageIndex/Compare use `GroupName` (default "PDFs"), not `DocId`
