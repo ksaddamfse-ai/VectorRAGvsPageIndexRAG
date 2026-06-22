@@ -1,34 +1,42 @@
 # PageIndex RAG — Design Spec
 
+**Status:** Implemented
+
 ## Overview
 
-Add a second set of RAG endpoints using the **PageIndex (vectorless RAG)** paradigm. Instead of chunking + embedding + vector search, the system builds a hierarchical document tree via LLM at ingest time, stores it in SQLite, and reasons over the tree at query time to retrieve relevant sections by node ID.
+Vectorless RAG using deterministic PDF structure parsing + LLM summaries. PDF uploaded → text extracted via PdfPig → font heuristics build hierarchical document tree → LLM generates summaries for each node → stored in SQLite. Query: LLM reasons over combined skeleton → fetches node texts → LLM generates answer.
 
 ## Endpoints
 
 | Method | Route | Purpose |
 |---|---|---|
-| POST | `/api/pageindex/documents` | Upload PDF, build tree, store in SQLite, return docId + tree JSON |
-| POST | `/api/pageindex/query` | Navigate tree by LLM reasoning → fetch node texts → LLM answer |
+| POST | `/api/pageindex/documents?provider=X&model=Y&groupName=PDFs` | Upload PDF, parse tree + LLM summaries, store in SQLite |
+| GET | `/api/pageindex/query?groupName=PDFs&question=X` | Navigate combined skeleton → fetch node texts → LLM answer |
 
 ## Ingestion Flow
 
 1. Client sends PDF via multipart form
-2. `DocumentProcessor.ExtractText()` extracts raw text (PdfPig)
-3. `DocumentTreeBuilder.BuildTreeAsync()` sends text to LLM with a prompt that asks it to build a hierarchical JSON tree with section titles, summaries, and full raw text for leaf nodes
-4. Tree is stored in SQLite in two tables:
-   - `document_trees` — doc_id, file_name, tree_json (lightweight tree with summaries only)
+2. `PdfStructureParser.Parse()` deterministic parsing:
+   - Collects all words with font metadata (size, position, page)
+   - Calculates median font size → header threshold = median × 1.2
+   - Detects section headers by font size grouping
+   - Builds text blocks (paragraphs) by vertical gap detection (gap > 1.5× line height)
+   - Builds tree structure from headers with font-size nesting
+3. `DocumentTreeBuilder.GenerateSummariesAsync()` sends only text to LLM for one-sentence summaries per node
+4. Tree stored in SQLite in two tables:
+   - `document_trees` — doc_id, file_name, tree_json, group_name (with index on group_name)
    - `node_texts` — doc_id, node_id, text (raw text per node)
-5. Returns `{ docId, fileName, status, pageCount, treeJson }`
+5. Returns `PageIndexIngestionResponse(DocId, FileName, Status, PageCount, TreeJson)`
 
 ## Query Flow
 
-1. Client sends `{ docId, question, provider, model }`
-2. Load tree JSON from SQLite
-3. **Step 1 — Navigation**: Send only titles + summaries to LLM. LLM reasons over the tree and returns relevant node IDs
-4. Fetch raw text from `node_texts` for those node IDs
-5. **Step 2 — Answer**: Send raw text + question to LLM for final answer
-6. Returns `{ answer, citations: [{ title, pageIndex, text }] }`
+1. Client sends `{ groupName, question, provider, model }` via GET query params
+2. `BuildCombinedSkeletonAsync` fetches all trees for the group from SQLite
+3. Builds combined skeleton with source filename prefixes (e.g., "Document: resume.pdf\n  - node_001: Title — Summary")
+4. **Step 1 — Navigation**: Send combined skeleton to LLM. LLM reasons over the tree and returns relevant node IDs as JSON array
+5. Fetch raw text from `node_texts` for those node IDs via `GetNodeTextsByNodeIdsAsync`
+6. **Step 2 — Answer**: Send raw text + question to LLM for final answer
+7. Returns `PageIndexQueryResponse(Answer, Citations: [])` — citations empty for group queries
 
 ## SQLite Schema
 
@@ -37,8 +45,11 @@ CREATE TABLE IF NOT EXISTS document_trees (
     doc_id TEXT PRIMARY KEY,
     file_name TEXT NOT NULL,
     tree_json TEXT NOT NULL,
+    group_name TEXT NOT NULL DEFAULT '',
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
+
+CREATE INDEX IF NOT EXISTS idx_group_name ON document_trees(group_name);
 
 CREATE TABLE IF NOT EXISTS node_texts (
     doc_id TEXT NOT NULL,
@@ -48,43 +59,36 @@ CREATE TABLE IF NOT EXISTS node_texts (
 );
 ```
 
-## New Files
+## Files
 
 | File | Purpose |
 |---|---|
 | `Settings/PageIndexSettings.cs` | `DbPath` config |
-| `Models/DocumentTree.cs` | Root tree model (title, nodeId, summary, children) |
+| `Models/DocumentTree.cs` | Root tree model (title, nodeId, summary, children, DocId, FileName, GroupName, TotalPages) |
 | `Models/TreeNode.cs` | Node model (title, nodeId, summary, text, children) |
 | `DTOs/PageIndexIngestionResponse.cs` | `(DocId, FileName, Status, PageCount, TreeJson)` |
-| `DTOs/PageIndexQueryRequest.cs` | `(DocId, Question, Provider, Model)` |
+| `DTOs/PageIndexQueryRequest.cs` | `(Question, Provider, Model, GroupName)` |
 | `DTOs/PageIndexQueryResponse.cs` | `(Answer, Citations)` |
 | `DTOs/PageIndexCitation.cs` | `(Title, PageIndex, Text)` |
-| `Services/Interfaces/IDocumentTreeBuilder.cs` | Tree building interface |
+| `Services/Interfaces/IPageIndexDatabase.cs` | SQLite storage interface |
 | `Services/Interfaces/IPageIndexService.cs` | Ingestion + query interface |
-| `Services/DocumentTreeBuilder.cs` | Calls LLM to build hierarchical tree |
-| `Services/PageIndexService.cs` | Orchestrates full pipeline with SQLite |
-| `Controllers/PageIndexController.cs` | Two endpoints |
-
-## Modified Files
-
-| File | Change |
-|---|---|
-| `Program.cs` | Register `PageIndexSettings`, `IDocumentTreeBuilder`, `IPageIndexService` |
-| `appsettings.json` | Add `PageIndex:DbPath` section |
-| `Filters/ProviderModelSchemaFilter.cs` | Add `PageIndexQueryRequest` handling for Swagger dropdowns |
-| `VectorRAGvsPageIndexRAG.csproj` | Add `Microsoft.Data.Sqlite` (10.0.9) |
+| `Services/PdfStructureParser.cs` | Deterministic PDF structure via font heuristics |
+| `Services/DocumentTreeBuilder.cs` | Parser + LLM summaries → DocumentTree |
+| `Services/SqlitePageIndexDatabase.cs` | SQLite implementation of IPageIndexDatabase |
+| `Services/PageIndexService.cs` | Orchestrates full pipeline |
+| `Controllers/PageIndexController.cs` | Two endpoints (POST ingest, GET query) |
 
 ## Default LLM Provider
 
-Both endpoints default to `NvidiaNim` / `meta/llama-3.3-70b-instruct` with optional override via query param / request body.
+Both endpoints default to `NvidiaNim` / `meta/llama-3.3-70b-instruct` with optional override via query param.
 
 ## Tradeoffs vs Vector RAG
 
 | Dimension | Vector RAG | PageIndex RAG |
 |---|---|---|
-| Ingestion | Embedding API per chunk + Qdrant upsert | One LLM call per doc |
-| Query | One embedding + one LLM call | Two LLM calls |
+| Ingestion | Embedding API per chunk + Qdrant upsert | Deterministic parsing + LLM summaries per doc |
+| Query | One embedding + one LLM call | Two LLM calls (navigation + answer) |
 | Latency | ~1-3s | ~3-8s |
 | Retrieval logic | Semantic similarity | LLM reasoning over structure |
-| Chunking | 512-char chunks | Natural sections |
+| Chunking | 512-char chunks | Natural sections (font heuristics) |
 | Storage | Qdrant (external gRPC) | SQLite (local file) |

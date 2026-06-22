@@ -1,7 +1,8 @@
 # PageIndex Group Query — Design Spec
 
 **Date:** 2026-06-21
-**Goal:** Enable PageIndex to group documents (e.g., resumes) under a shared group name, then query across all documents in the group with a combined skeleton for cross-document comparison.
+**Status:** Implemented
+**Goal:** Enable PageIndex to group documents under a shared group name, then query across all documents in the group with a combined skeleton for cross-document comparison.
 
 ---
 
@@ -15,10 +16,9 @@ Vector RAG returns top-K chunks from across documents — fragments that may mis
 
 Both RAG (`collectionName`) and PageIndex (`groupName`) default to `"PDFs"`.
 
-- `VectorStoreRegistryEntry.DefaultCollectionName` = `"PDFs"` (already done)
-- `appsettings.json` — `DefaultCollectionName` under Qdrant/AzureAISearch = `"PDFs"` (already done)
-- `ProviderModelSchemaFilter` — Swagger default for `collectionName` = `"PDFs"` (already done)
-- PageIndex's `groupName` default = `"PDFs"` (new)
+- `VectorStoreRegistryEntry.DefaultCollectionName` = `"PDFs"`
+- `appsettings.json` — `DefaultCollectionName` under Qdrant/AzureAISearch = `"PDFs"`
+- `ProviderModelSchemaFilter` — Swagger default for `collectionName` and `groupName` = `"PDFs"`
 
 ---
 
@@ -26,7 +26,7 @@ Both RAG (`collectionName`) and PageIndex (`groupName`) default to `"PDFs"`.
 
 ### DocumentTree
 
-Add `GroupName` property:
+`GroupName` property added:
 ```csharp
 // Models/DocumentTree.cs
 [JsonIgnore]
@@ -36,11 +36,18 @@ public string GroupName { get; set; } = "";
 ### SQLite Schema
 
 ```sql
-ALTER TABLE document_trees ADD COLUMN group_name TEXT NOT NULL DEFAULT '';
+CREATE TABLE IF NOT EXISTS document_trees (
+    doc_id TEXT PRIMARY KEY,
+    file_name TEXT NOT NULL,
+    tree_json TEXT NOT NULL,
+    group_name TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
 CREATE INDEX IF NOT EXISTS idx_group_name ON document_trees(group_name);
 ```
 
-`IPageIndexDatabase` gets a new method:
+`IPageIndexDatabase` method:
 ```csharp
 Task<List<(string DocId, string TreeJson)>> GetDocumentTreesByGroupAsync(string groupName);
 ```
@@ -51,14 +58,14 @@ Task<List<(string DocId, string TreeJson)>> GetDocumentTreesByGroupAsync(string 
 
 ### Controller
 
-`PageIndexController.Ingest` gets the param:
+`PageIndexController.Ingest` accepts `groupName`:
 ```
 POST /api/pageindex/documents?groupName=PDFs
 ```
 
 ### Service
 
-`PageIndexService.IngestAsync` accepts `string? groupName = "PDFs"`, sets `tree.GroupName`.
+`PageIndexService.IngestAsync` accepts `string groupName = "PDFs"`, sets `tree.GroupName`.
 
 ### Database
 
@@ -68,60 +75,58 @@ POST /api/pageindex/documents?groupName=PDFs
 
 ## 5. PageIndex Group Query — Combined Skeleton
 
-### New Query Mode
+### Query Mode
 
-Existing `GET /api/pageindex/query` accepts either `docId` or `groupName`:
+`GET /api/pageindex/query` uses `groupName` (not `docId`):
 ```
 GET /api/pageindex/query?groupName=PDFs&question=most skilled candidate?
 ```
 
 ### Flow
 
-1. Fetch all trees where `group_name = groupName` from SQLite
-2. Build a combined skeleton with source filename prefixes:
-
+1. `BuildCombinedSkeletonAsync(groupName)` fetches all trees where `group_name = groupName`
+2. Builds combined skeleton with source filename prefixes:
 ```
 Document: resume_john.pdf
-  - sec_01: Summary — 5 years SWE at Google
-  - sub_01a: Skills — Python, Kubernetes, AWS
+  - node_001: Section Title — Summary text
 
 Document: resume_jane.pdf
-  - sec_01: Summary — 3 years ML at Meta
-  - sub_01a: Skills — PyTorch, TensorFlow, GCP
+  - node_001: Section Title — Summary text
 ```
-
 3. LLM picks node_ids from across all documents
-4. Fetch the selected node texts (all documents)
+4. `GetNodeTextsByNodeIdsAsync` fetches selected node texts (all documents)
 5. LLM answers with comparison
 
 ### Implementation
 
-`PageIndexService.GetSkeletonAsync` — new method that builds the combined skeleton string from multiple trees.
-
-`IPageIndexDatabase.GetDocumentTreesByGroupAsync` — fetches all trees for a group.
+- `PageIndexService.BuildCombinedSkeletonAsync` — builds combined skeleton from multiple trees
+- `IPageIndexDatabase.GetDocumentTreesByGroupAsync` — fetches all trees for a group
+- `IPageIndexDatabase.GetNodeTextsByNodeIdsAsync` — fetches node texts by node_id across all docs
 
 ---
 
 ## 6. Compare Endpoint
 
-`CompareController` — add `groupName` param. Creates `PageIndexQueryRequest` with `groupName` instead of `docId`.
+`CompareController` uses `groupName` for PageIndex and `collectionName` for Vector RAG:
+```
+GET /api/compare/query?question=X&groupName=PDFs&collectionName=PDFs
+```
 
-`PageIndexQueryRequest` — add optional `GroupName` field (default `""`). Query service checks: if `GroupName` is set, use group query; else use single-doc query.
+`CompareQueryRequest` has `GroupName` and `CollectionName` fields. Compare service creates `PageIndexQueryRequest` with `GroupName`.
 
 ---
 
-## 7. Files Changed
+## 7. Files
 
 | File | Change |
 |------|--------|
-| `Models/DocumentTree.cs` | Add `GroupName` property |
-| `Services/Interfaces/IPageIndexDatabase.cs` | Add `GetDocumentTreesByGroupAsync` |
-| `Services/SqlitePageIndexDatabase.cs` | Schema migration + new query method |
-| `Services/PageIndexService.cs` | Add `groupName` to ingest, add group query logic |
-| `Services/Interfaces/IPageIndexService.cs` | Update `IngestAsync` signature |
-| `Controllers/PageIndexController.cs` | Add `groupName` param to ingest + query |
-| `DTOs/PageIndexQueryRequest.cs` | Add optional `GroupName` field |
-| `Controllers/CompareController.cs` | Add `groupName` param |
-| `Settings/VectorStoreRegistryEntry.cs` | Default = `"PDFs"` (done) |
-| `appsettings.json` | Default = `"PDFs"` (done) |
-| `Filters/ProviderModelSchemaFilter.cs` | Default = `"PDFs"` (done) |
+| `Models/DocumentTree.cs` | Added `GroupName` property (JsonIgnore) |
+| `Services/Interfaces/IPageIndexDatabase.cs` | Added `GetDocumentTreesByGroupAsync`, `GetNodeTextsByNodeIdsAsync` |
+| `Services/SqlitePageIndexDatabase.cs` | Schema with `group_name` column + index, new query methods |
+| `Services/PageIndexService.cs` | `groupName` param on ingest, group query via `BuildCombinedSkeletonAsync` |
+| `Services/Interfaces/IPageIndexService.cs` | `IngestAsync` signature with `groupName` |
+| `Controllers/PageIndexController.cs` | `groupName` param on ingest + query (GET) |
+| `DTOs/PageIndexQueryRequest.cs` | `GroupName` field (default "PDFs") |
+| `Controllers/CompareController.cs` | `groupName` + `collectionName` params |
+| `DTOs/CompareQueryRequest.cs` | `GroupName` + `CollectionName` fields |
+| `Filters/ProviderModelSchemaFilter.cs` | Defaults for `groupName` and `collectionName` = "PDFs" |

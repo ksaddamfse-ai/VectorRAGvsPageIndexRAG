@@ -72,13 +72,14 @@ flowchart LR
 
 ## Endpoints
 
-| Method | Path | Description |
-|--------|------|-------------|
-| `POST` | `/api/rag/documents` | Vector: ingest PDF, chunk, embed, store in Qdrant |
-| `GET` | `/api/rag/query` | Vector: embed question, search, LLM answer |
-| `POST` | `/api/pageindex/documents` | PageIndex: deterministic parse + LLM summaries, store in SQLite |
-| `GET` | `/api/pageindex/query` | PageIndex: LLM navigates tree, fetches sections, answers |
-| `GET` | `/api/compare/query` | Compare both strategies side-by-side with timing |
+| Method | Path | Query Params | Description |
+|--------|------|--------------|-------------|
+| `POST` | `/api/rag/documents` | `collectionName` (default: `PDFs`) | Ingest PDF: extract text, chunk, embed, store in Qdrant |
+| `GET` | `/api/rag/query` | `question`, `provider`, `model`, `topK` (default: 2), `collectionName` (default: `PDFs`) | Embed question, cosine search, LLM answer |
+| `POST` | `/api/pageindex/documents` | `provider`, `model`, `groupName` (default: `PDFs`) | Deterministic PDF parse + LLM summaries, store in SQLite |
+| `GET` | `/api/pageindex/query` | `question`, `provider`, `model`, `groupName` | LLM navigates tree skeleton, fetches sections, answers |
+| `GET` | `/api/compare/query` | `question`, `provider`, `model`, `topK` (default: 2), `groupName`, `collectionName` | Run both RAG strategies side-by-side with timing |
+| `POST` | `/api/chat` | `question`, `provider` (default: `OpenRouter`), `model` (default: `openrouter/free`) | Direct LLM chat (no RAG pipeline) |
 
 ## Quick Start
 
@@ -141,8 +142,8 @@ Run against `test-pdfs/` using OpenCode / `deepseek-v4-flash-free`:
 |----------|----------------:|---------------:|---------------|------------------|
 | What is the CloudSync API rate limit? | 10,306 | 160,873 | Free: 100/min, Pro: 1,000/min, Enterprise: 10,000/min, Premium: 50,000/min | 1000 requests per minute per client ID |
 | What programming languages does the candidate know? | 4,780 | 23,779 | Python, Java, C++, R, SQL, JavaScript, Go | Context does not contain information about programming languages |
-| What are the termination clauses? | 19,351 | 86,677 | Section 5.1: Agreement continues for Subscription Term. Section 5.2: Either party may terminate for cause upon 30 days notice | Section 5.1: Agreement commences on Effective Date. Section 5.2: Either party may terminate for material breach |
-| Compare performance metrics across sections | 63,762 | 174,437 | ML Engineer: 95% accuracy, 40% latency reduction. Data Scientist: 89% AUC churn model | Rate Limiting: 100-50,000 req/min by tier. Throughput: 10M+ daily users. Latency: 40% reduction via TensorRT |
+| What are the termination clauses in this contract? | 19,351 | 86,677 | Section 5.1: Agreement continues for Subscription Term. Section 5.2: Either party may terminate for cause upon 30 days notice | Section 5.1: Agreement commences on Effective Date. Section 5.2: Either party may terminate for material breach |
+| Compare performance metrics across all sections | 63,762 | 174,437 | ML Engineer: 95% accuracy, 40% latency reduction. Data Scientist: 89% AUC churn model | Rate Limiting: 100-50,000 req/min by tier. Throughput: 10M+ daily users. Latency: 40% reduction via TensorRT |
 | What is the meaning of life? | 5,214 | 4,290 | No information about the meaning of life in context | No relevant sections found |
 
 ### Key Observations
@@ -161,9 +162,9 @@ Run against `test-pdfs/` using OpenCode / `deepseek-v4-flash-free`:
 
 | Section | Purpose |
 |---------|---------|
-| `ProviderRegistry` | Chat LLM providers (OpenCode, OpenRouter, NvidiaNim, GoogleAI, etc.) |
+| `ProviderRegistry` | Chat LLM providers (OpenRouter, NvidiaNim, FoundryLocal, Ollama, OpenCode, GoogleAI) |
 | `EmbeddingRegistry` | Embedding models (NvidiaNim, Ollama), `ActiveEmbeddingProvider` selects active |
-| `VectorStoreRegistry` | Vector DB (Qdrant), `ActiveProvider` selects active |
+| `VectorStoreRegistry` | Vector DB (Qdrant, AzureAISearch), `ActiveProvider` selects active |
 | `PageIndex` | SQLite path (`DbPath: "pageindex.db"`) |
 | `ProviderContextWindows` | Context window sizes per provider/model for token budgeting |
 

@@ -1,7 +1,7 @@
 ﻿# Vector Store Abstraction: MEVD Integration
 
 **Date:** 2026-06-21
-**Status:** Approved Design
+**Status:** Implemented
 **Driver:** The project used `Qdrant.Client` directly despite config already listing a second vector store provider (AzureAI Search). This spec introduces `Microsoft.Extensions.VectorData` (MEVD) — the official .NET MAF vector store abstraction.
 
 ## Motivation
@@ -23,7 +23,7 @@ After:
 RagIngestionService → VectorStore (abstract, from MEVD.Abstractions)
 RagQueryService     → VectorStore (abstract)
 Program.cs          → new QdrantVectorStore(new QdrantClient(...))
-                         ↑ swappable to AzureAISearchVectorStore
+                      ↑ swappable to AzureAISearchVectorStore
 ```
 
 ### Key types
@@ -43,7 +43,7 @@ Program.cs          → new QdrantVectorStore(new QdrantClient(...))
 public class RagChunkRecord
 {
     [VectorStoreKey]
-    public string Key { get; set; } = "";
+    public Guid Key { get; set; }
 
     [VectorStoreData]
     public string Text { get; set; } = "";
@@ -57,27 +57,26 @@ public class RagChunkRecord
     [VectorStoreData]
     public int TotalChunks { get; set; }
 
-    [VectorStoreVector]
+    [VectorStoreVector(1)]
     public float[]? Vector { get; set; }
 }
 ```
 
-- `[VectorStoreVector]` without dimensions — vector size is runtime-determined from embedding output
-- For collection creation, a `VectorStoreCollectionDefinition` supplies the actual dimension
-- For search/read, the attribute-only schema suffices (no dimension needed)
+- `[VectorStoreVector(1)]` with placeholder dimension — actual size supplied via `VectorStoreCollectionDefinition` at runtime
+- `Key` is `Guid` (not string) — deterministic chunk IDs parsed to GUID
 
 ### Runtime dimension handling
 
 Since vector size is only known after embedding generation:
 
-1. Generate embeddings for all chunks
+1. Generate embeddings for all missing chunks
 2. Read `embeddings[0].Vector.Length` → `vectorSize`
-3. Build `VectorStoreCollectionDefinition` with `VectorStoreVectorProperty { Dimensions = vectorSize }`
-4. Call `GetCollection<string, RagChunkRecord>(name, definition)`
+3. Build `VectorStoreCollectionDefinition` with `VectorStoreVectorProperty("Vector", typeof(float[]), vectorSize)`
+4. Call `GetCollection<Guid, RagChunkRecord>(name, definition)`
 5. Call `EnsureCollectionExistsAsync()` (creates if missing, no-op if exists)
 6. Upsert records
 
-For query path, no definition needed — just `GetCollection<string, RagChunkRecord>(name)`.
+For query path, no definition needed — just `GetCollection<Guid, RagChunkRecord>(name)`.
 
 ## Service Changes
 
@@ -102,26 +101,19 @@ For query path, no definition needed — just `GetCollection<string, RagChunkRec
 Register `VectorStore` (not raw `QdrantClient`):
 
 ```csharp
-builder.Services.AddSingleton<VectorStore>(sp =>
+builder.Services.AddSingleton<VectorStore>(_ => activeVectorStoreProvider switch
 {
-    var section = builder.Configuration.GetSection("VectorStoreRegistry");
-    var activeProvider = section["ActiveProvider"]!;
-    var cfg = section.GetSection(activeProvider);
-
-    return activeProvider switch
-    {
-        "Qdrant" => new QdrantVectorStore(
-            new QdrantClient(
-                host: cfg["Host"] ?? "localhost",
-                port: cfg.GetValue<int>("Port")),
-            ownsClient: true),
-        _ => throw new InvalidOperationException(
-            $"Unknown vector store provider: {activeProvider}")
-    };
+    "Qdrant" => new QdrantVectorStore(
+        new QdrantClient(
+            host: activeVectorStoreSection["Host"] ?? "localhost",
+            port: activeVectorStoreSection.GetValue<int>("Port")),
+        ownsClient: true),
+    _ => throw new InvalidOperationException(
+        $"Unknown vector store provider: {activeVectorStoreProvider}")
 });
 ```
 
-`IOptions<VectorStoreRegistryEntry>` registration kept for chunk config (ChunkSize, ChunkOverlap, DefaultCollectionName).
+`IOptions<VectorStoreRegistryEntry>` registration kept for chunk config (ChunkSize, ChunkOverlap, DefaultCollectionName, EmbeddingBatchSize).
 
 ## Provider Swap (future)
 
@@ -138,12 +130,12 @@ No changes to `RagIngestionService` or `RagQueryService` — they only depend on
 |---------|---------|------|
 | `Microsoft.SemanticKernel.Connectors.Qdrant` | 1.74.0-preview | New |
 | `Microsoft.Extensions.VectorData.Abstractions` | (transitive) | New |
-| `Qdrant.Client` | (transitive, already present) | Existing |
+| `Qdrant.Client` | 1.18.1 (transitive) | Existing |
 
 ## Not Changed
 
 - `VectorStoreRegistryEntry` config model (chunk config lives here)
 - `appsettings.json` config structure
-- `RagChunk` model (used in response DTOs)
+- `RagChunk` model (used in response DTOs, has Vector property for in-flight embeddings)
 - All controllers, DTOs, other services
 - `IRagIngestionService` / `IRagQueryService` interfaces
