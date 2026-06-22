@@ -51,7 +51,9 @@ foreach (var providerSection in builder.Configuration.GetSection("ProviderRegist
             "Anthropic" => new AnthropicClient { ApiKey = providerSection["ApiKey"] ?? "not-needed" }
                 .AsIChatClient(chatModel),
 
-            "GoogleAI" => new GenerativeAIChatClient(providerSection["ApiKey"] ?? "not-needed"),
+            "GoogleAI" => new GenerativeAIChatClient(
+                providerSection["ApiKey"] ?? "not-needed",
+                $"models/{chatModel}"),
 
             _ => new OpenAIClient(
                 new ApiKeyCredential(string.IsNullOrEmpty(providerSection["ApiKey"]) ? "not-needed" : providerSection["ApiKey"]!),

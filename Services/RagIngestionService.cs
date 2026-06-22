@@ -16,7 +16,7 @@ public class RagIngestionService(
     IOptions<VectorStoreRegistryEntry> vsConfig,
     ILogger<RagIngestionService> logger) : IRagIngestionService
 {
-    public async Task<RagIngestionResult> IngestAsync(string text, string fileName, string collectionName = "")
+    public async Task<RagIngestionResult> IngestAsync(string text, string fileName, string collectionName = "PDFs")
     {
         var cfg = vsConfig.Value;
         var collName = string.IsNullOrWhiteSpace(collectionName) ? cfg.DefaultCollectionName : collectionName;

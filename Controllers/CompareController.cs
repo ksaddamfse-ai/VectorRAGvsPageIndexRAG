@@ -17,11 +17,11 @@ public class CompareController(
     {
         if (string.IsNullOrWhiteSpace(request.Question))
             return BadRequest("Question is required.");
-        if (string.IsNullOrWhiteSpace(request.DocId) && string.IsNullOrWhiteSpace(request.GroupName))
-            return BadRequest("docId or groupName is required.");
+        if (string.IsNullOrWhiteSpace(request.GroupName))
+            return BadRequest("groupName is required.");
 
         var ragReq = new RagQueryRequest(request.Question, request.Provider, request.Model, request.TopK, request.CollectionName);
-        var piReq = new PageIndexQueryRequest(request.DocId, request.Question, request.Provider, request.Model, request.GroupName);
+        var piReq = new PageIndexQueryRequest(request.Question, request.Provider, request.Model, request.GroupName);
 
         var ragTask = SafeRun(() => ragQueryService.QueryAsync(ragReq));
         var piTask = SafeRun(() => pageIndexService.QueryAsync(piReq));

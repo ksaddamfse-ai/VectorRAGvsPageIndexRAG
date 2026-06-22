@@ -33,8 +33,8 @@ public class PageIndexController(IPageIndexService pageIndexService) : Controlle
     [ProducesResponseType<string>(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> Query([FromQuery] PageIndexQueryRequest request)
     {
-        if (string.IsNullOrWhiteSpace(request.DocId) && string.IsNullOrWhiteSpace(request.GroupName))
-            return BadRequest("docId or groupName is required.");
+        if (string.IsNullOrWhiteSpace(request.GroupName))
+            return BadRequest("groupName is required.");
 
         if (string.IsNullOrWhiteSpace(request.Question))
             return BadRequest("Question is required.");

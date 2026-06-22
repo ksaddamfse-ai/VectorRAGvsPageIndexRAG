@@ -2,6 +2,26 @@
 
 ## Design Decisions
 
+### 2026-06-22: Endpoint Simplification (GroupName Default)
+- **PageIndex query**: Removed `DocId` parameter, `GroupName` is now required with default "PDFs"
+- **Compare query**: Same change — `GroupName` replaces `DocId`
+- **RAG collection**: Default `CollectionName = "PDFs"` across all endpoints
+- **Why:** Group-based queries are the primary use case. Single-doc lookup adds complexity without value.
+- **Swagger defaults**: Provider defaults to "GoogleAI", model to "gemini-3.5-flash"
+
+### 2026-06-22: GoogleAI Model Parameter
+- **Bug**: `GenerativeAIChatClient` constructor was called with only `apiKey`, missing `modelName`
+- **Fix**: Pass `($"models/{chatModel}")` as second parameter
+- **Impact**: Without this, GoogleAI would always use default model "gemini-1.5-flash" regardless of config
+
+### 2026-06-22: Test PDF Corpus
+- Created 3 synthetic PDFs for RAG comparison testing:
+  - **Technical Report**: API documentation (10 pages, 8 sections, code snippets, tables)
+  - **Resume**: ML engineer CV (5 pages, 3 employers, 12+ skills, email in header)
+  - **Legal Contract**: Software license (9 pages, 9 sections, numbered clauses, GDPR)
+- Generated via `Tools/PdfGenerator` using PdfPig's `PdfDocumentBuilder`
+- Output to `test-pdfs/` (gitignored)
+
 ### 2026-06-20: Vector Store Abstraction
 - Use `VectorStore` from Microsoft.Extensions.VectorData.Abstractions (MEVD)
 - Config-driven ActiveProvider switch (Qdrant now, Azure AI Search later)
