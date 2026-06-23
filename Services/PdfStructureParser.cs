@@ -47,12 +47,12 @@ public partial class PdfStructureParser
 
         var headerCandidates = allWords
             .Where(w => w.FontSize >= headerThreshold)
-            .GroupBy(w => new { w.PageNumber, w.Top })
+            .GroupBy(w => new { w.PageNumber, LineKey = Math.Round(w.Top / 3.0) * 3 })
             .Select(g => new HeaderCandidate
             {
                 PageNumber = g.Key.PageNumber,
-                Top = g.Key.Top,
-                Text = string.Join(" ", g.Select(w => w.Text)),
+                Top = g.Min(w => w.Top),
+                Text = string.Join(" ", g.OrderBy(w => w.Left).Select(w => w.Text)),
                 FontSize = g.First().FontSize
             })
             .OrderBy(h => h.PageNumber)
@@ -201,6 +201,11 @@ public partial class PdfStructureParser
             {
                 newNode.StartPage = sectionBlocks.First().PageNumber;
                 newNode.EndPage = sectionBlocks.Last().PageNumber;
+            }
+            else
+            {
+                newNode.StartPage = header.PageNumber;
+                newNode.EndPage = header.PageNumber;
             }
 
             while (nodeStack.Count > 0 && header.FontSize <= nodeStack.Peek().FontSize)
