@@ -491,3 +491,6 @@ $RECYCLE.BIN/
 
 # Server log files
 svr*.log
+
+# Understand Anything knowledge graph
+.understand-anything/
