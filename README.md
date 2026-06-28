@@ -1,6 +1,6 @@
 # Vector RAG vs Page Index RAG
 
-[![CI](https://github.com/saddam/RAGBench/actions/workflows/ci.yml/badge.svg)](https://github.com/saddam/RAGBench/actions/workflows/ci.yml)
+[![CI](https://github.com/ksaddamfse-ai/RAGBench/actions/workflows/ci.yml/badge.svg)](https://github.com/ksaddamfse-ai/RAGBench/actions/workflows/ci.yml)
 
 ASP.NET Core 10 Web API comparing Vector RAG and Page Index RAG strategies.
 
