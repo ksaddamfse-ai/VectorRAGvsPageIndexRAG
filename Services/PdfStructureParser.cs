@@ -2,9 +2,9 @@ using System.Text;
 using System.Text.RegularExpressions;
 using UglyToad.PdfPig;
 using UglyToad.PdfPig.Content;
-using VectorRAGvsPageIndexRAG.Models;
+using RAGBench.Models;
 
-namespace VectorRAGvsPageIndexRAG.Services;
+namespace RAGBench.Services;
 
 public partial class PdfStructureParser
 {

@@ -104,7 +104,7 @@
 - **Problem:** `Microsoft.NET.Sdk.Web` default glob (`**/*.cs`) picks up test project files when test project is a subdirectory of the main project. Causes duplicate assembly attributes + xunit not found errors in solution builds.
 - **Root cause:** SDK-style projects have `EnableDefaultCompileItems=true` — the glob traverses all subdirectories including sibling project folders.
 - **Fix:**
-  1. Move test project to `Tests\VectorRAGvsPageIndexRAG.Tests\` (peer directory via `Tests\` container)
+  1. Move test project to `Tests\RAGBench.Tests\` (peer directory via `Tests\` container)
   2. Main `.csproj` explicitly removes test and tools files via:
      ```xml
      <Compile Remove="Tests\**\*" />
@@ -115,7 +115,7 @@
      <EmbeddedResource Remove="Tools\**\*" />
      ```
   3. Solution gets a `Tests` solution folder with `NestedProjects`
-- Build now works with plain `dotnet build VectorRAGvsPageIndexRAG.sln` — no `--no-dependencies` needed
+- Build now works with plain `dotnet build RAGBench.sln` — no `--no-dependencies` needed
 
 ### PdfPig Font Metadata API
 - `Word` class has `FontName` (string?) and `Letters` (IReadOnlyList<Letter>) but NOT `Font.Size`

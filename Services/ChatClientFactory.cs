@@ -1,8 +1,8 @@
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.DependencyInjection;
-using VectorRAGvsPageIndexRAG.Services.Interfaces;
+using RAGBench.Services.Interfaces;
 
-namespace VectorRAGvsPageIndexRAG.Services;
+namespace RAGBench.Services;
 
 public class ChatClientFactory(IServiceProvider serviceProvider) : IChatClientFactory
 {

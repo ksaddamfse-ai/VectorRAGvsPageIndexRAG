@@ -1,6 +1,6 @@
 using Microsoft.Extensions.AI;
 
-namespace VectorRAGvsPageIndexRAG.Services.Interfaces;
+namespace RAGBench.Services.Interfaces;
 
 public interface IChatClientFactory
 {

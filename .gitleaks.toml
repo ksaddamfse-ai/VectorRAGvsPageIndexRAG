@@ -1,4 +1,4 @@
-title = "VectorRAGvsPageIndexRAG gitleaks config"
+title = "RAGBench gitleaks config"
 
 [extend]
 useDefault = true

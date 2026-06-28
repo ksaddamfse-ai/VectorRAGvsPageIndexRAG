@@ -4,7 +4,7 @@ using UglyToad.PdfPig.Core;
 using UglyToad.PdfPig.Fonts.Standard14Fonts;
 using UglyToad.PdfPig.Writer;
 
-namespace VectorRAGvsPageIndexRAG.Tools.PdfGenerator;
+namespace RAGBench.Tools.PdfGenerator;
 
 public class TechnicalReport
 {

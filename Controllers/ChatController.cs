@@ -1,10 +1,10 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Options;
-using VectorRAGvsPageIndexRAG.Services.Interfaces;
-using VectorRAGvsPageIndexRAG.Settings;
+using RAGBench.Services.Interfaces;
+using RAGBench.Settings;
 
-namespace VectorRAGvsPageIndexRAG;
+namespace RAGBench;
 
 [ApiController]
 [Route("api/chat")]

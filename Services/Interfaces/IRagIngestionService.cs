@@ -1,6 +1,6 @@
-using VectorRAGvsPageIndexRAG.Models;
+using RAGBench.Models;
 
-namespace VectorRAGvsPageIndexRAG.Services.Interfaces;
+namespace RAGBench.Services.Interfaces;
 
 public interface IRagIngestionService
 {

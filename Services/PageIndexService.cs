@@ -1,12 +1,12 @@
 using System.Text.Json;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Options;
-using VectorRAGvsPageIndexRAG.DTOs;
-using VectorRAGvsPageIndexRAG.Models;
-using VectorRAGvsPageIndexRAG.Services.Interfaces;
-using VectorRAGvsPageIndexRAG.Settings;
+using RAGBench.DTOs;
+using RAGBench.Models;
+using RAGBench.Services.Interfaces;
+using RAGBench.Settings;
 
-namespace VectorRAGvsPageIndexRAG.Services;
+namespace RAGBench.Services;
 
 public class PageIndexService(
     DocumentTreeBuilder treeBuilder,

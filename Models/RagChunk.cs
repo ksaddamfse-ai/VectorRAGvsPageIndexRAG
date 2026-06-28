@@ -1,7 +1,7 @@
 using System.Security.Cryptography;
 using System.Text;
 
-namespace VectorRAGvsPageIndexRAG.Models;
+namespace RAGBench.Models;
 
 public class RagChunk
 {

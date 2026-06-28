@@ -1,6 +1,6 @@
-using VectorRAGvsPageIndexRAG.Services;
+using RAGBench.Services;
 
-namespace VectorRAGvsPageIndexRAG.DTOs;
+namespace RAGBench.DTOs;
 
 public record CompareQueryResponse(
     RagResult Rag,

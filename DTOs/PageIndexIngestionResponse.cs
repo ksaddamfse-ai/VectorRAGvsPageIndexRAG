@@ -1,4 +1,4 @@
-namespace VectorRAGvsPageIndexRAG.DTOs;
+namespace RAGBench.DTOs;
 
 public record PageIndexIngestionResponse(
     string DocId,

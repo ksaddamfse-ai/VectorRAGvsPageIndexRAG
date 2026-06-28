@@ -1,6 +1,6 @@
 using System.Text.Json.Serialization;
 
-namespace VectorRAGvsPageIndexRAG.Models;
+namespace RAGBench.Models;
 
 public class DocumentTree
 {

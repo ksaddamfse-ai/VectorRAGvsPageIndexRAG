@@ -1,9 +1,9 @@
 using Microsoft.Extensions.AI;
 using UglyToad.PdfPig;
-using VectorRAGvsPageIndexRAG.Models;
-using VectorRAGvsPageIndexRAG.Services.Interfaces;
+using RAGBench.Models;
+using RAGBench.Services.Interfaces;
 
-namespace VectorRAGvsPageIndexRAG.Services;
+namespace RAGBench.Services;
 
 public class DocumentTreeBuilder(
     IChatClientFactory clientFactory,

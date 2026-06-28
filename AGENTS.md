@@ -96,7 +96,7 @@ Always use PDFs from `test-pdfs/` when testing endpoints:
 | `test-pdfs/resume.pdf` | 5 | Dr. Sarah Chen ML engineer CV (skills, experience) |
 | `test-pdfs/legal-contract.pdf` | 9 | Enterprise software license (clauses, GDPR) |
 
-Generated via: `dotnet run --project Tools/PdfGenerator/VectorRAGvsPageIndexRAG.Tools.PdfGenerator.csproj`
+Generated via: `dotnet run --project Tools/PdfGenerator/RAGBench.Tools.PdfGenerator.csproj`
 
 ## Curl Examples
 
@@ -137,8 +137,8 @@ curl -X 'POST' \
 ## Build
 
 - Target: net10.0
-- `dotnet build VectorRAGvsPageIndexRAG.sln` to compile all projects
-- `dotnet test Tests\VectorRAGvsPageIndexRAG.Tests\VectorRAGvsPageIndexRAG.Tests.csproj` to run tests
+- `dotnet build RAGBench.sln` to compile all projects
+- `dotnet test Tests\RAGBench.Tests\RAGBench.Tests.csproj` to run tests
 - `dotnet run` to serve at localhost:51095
 - Test project lives under `Tests\` to avoid Web SDK glob picking up test `.cs` files; main `.csproj` has `<Compile Remove="Tests\**\*">`
 - PDF generator lives under `Tools\` — excluded from main project via `<Compile Remove="Tools\**\*">`

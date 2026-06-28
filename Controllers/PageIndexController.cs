@@ -1,8 +1,8 @@
 using Microsoft.AspNetCore.Mvc;
-using VectorRAGvsPageIndexRAG.DTOs;
-using VectorRAGvsPageIndexRAG.Services.Interfaces;
+using RAGBench.DTOs;
+using RAGBench.Services.Interfaces;
 
-namespace VectorRAGvsPageIndexRAG;
+namespace RAGBench;
 
 [ApiController]
 [Route("api/pageindex")]

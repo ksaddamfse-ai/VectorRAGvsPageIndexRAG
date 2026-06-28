@@ -19,7 +19,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\VectorRAGvsPageIndexRAG.csproj" />
+    <ProjectReference Include="..\..\RAGBench.csproj" />
   </ItemGroup>
 
 </Project>

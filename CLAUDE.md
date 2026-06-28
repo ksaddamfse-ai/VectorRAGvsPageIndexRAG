@@ -21,7 +21,7 @@ test-pdfs/      - Sample PDFs for testing
 
 ```bash
 dotnet restore
-dotnet build VectorRAGvsPageIndexRAG.sln
+dotnet build RAGBench.sln
 dotnet run
 ```
 
@@ -30,7 +30,7 @@ Swagger UI at `https://localhost:51095/swagger`.
 ## Tests
 
 ```bash
-dotnet test Tests/VectorRAGvsPageIndexRAG.Tests/VectorRAGvsPageIndexRAG.Tests.csproj
+dotnet test Tests/RAGBench.Tests/RAGBench.Tests.csproj
 ```
 
 ## Endpoints
@@ -78,7 +78,7 @@ dotnet test Tests/VectorRAGvsPageIndexRAG.Tests/VectorRAGvsPageIndexRAG.Tests.cs
 
 ## Test PDFs
 
-Regenerate with: `dotnet run --project Tools/PdfGenerator/VectorRAGvsPageIndexRAG.Tools.PdfGenerator.csproj`
+Regenerate with: `dotnet run --project Tools/PdfGenerator/RAGBench.Tools.PdfGenerator.csproj`
 
 - `test-pdfs/technical-report.pdf` - CloudSync API docs (10 pages)
 - `test-pdfs/resume.pdf` - ML engineer CV (5 pages)
