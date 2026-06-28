@@ -58,7 +58,7 @@ git commit -m "feat: add EmbeddingBatchSize config"
 
 Current `RagChunk.cs`:
 ```csharp
-namespace VectorRAGvsPageIndexRAG.Models;
+namespace RAGBench.Models;
 
 public class RagChunk
 {
@@ -76,7 +76,7 @@ Replace with:
 using System.Security.Cryptography;
 using System.Text;
 
-namespace VectorRAGvsPageIndexRAG.Models;
+namespace RAGBench.Models;
 
 public class RagChunk
 {
@@ -119,7 +119,7 @@ git commit -m "feat: deterministic chunk IDs via SHA256-based GUID"
 
 ```csharp
 // Services/Interfaces/IRagIngestionService.cs
-namespace VectorRAGvsPageIndexRAG.Services.Interfaces;
+namespace RAGBench.Services.Interfaces;
 
 public interface IRagIngestionService
 {
@@ -133,7 +133,7 @@ public record RagIngestionResult(string FileName, int ChunkCount, List<RagChunk>
 
 ```csharp
 // DTOs/RagIngestionResponse.cs
-namespace VectorRAGvsPageIndexRAG.DTOs;
+namespace RAGBench.DTOs;
 
 public record RagIngestionResponse(string FileName, int ChunkCount, string CollectionName, List<RagChunkResponse> Chunks);
 ```
@@ -164,11 +164,11 @@ using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Options;
 using Microsoft.Extensions.VectorData;
 using Microsoft.SemanticKernel.Text;
-using VectorRAGvsPageIndexRAG.Models;
-using VectorRAGvsPageIndexRAG.Services.Interfaces;
-using VectorRAGvsPageIndexRAG.Settings;
+using RAGBench.Models;
+using RAGBench.Services.Interfaces;
+using RAGBench.Settings;
 
-namespace VectorRAGvsPageIndexRAG.Services;
+namespace RAGBench.Services;
 
 public class RagIngestionService(
     IEmbeddingGenerator<string, Embedding<float>> embedder,

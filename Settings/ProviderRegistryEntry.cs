@@ -1,4 +1,4 @@
-namespace VectorRAGvsPageIndexRAG.Settings;
+namespace RAGBench.Settings;
 
 public class ProviderRegistryEntry
 {

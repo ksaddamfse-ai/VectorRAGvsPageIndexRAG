@@ -2,9 +2,9 @@ using Microsoft.Extensions.Options;
 using Microsoft.OpenApi.Any;
 using Microsoft.OpenApi.Models;
 using Swashbuckle.AspNetCore.SwaggerGen;
-using VectorRAGvsPageIndexRAG.Settings;
+using RAGBench.Settings;
 
-namespace VectorRAGvsPageIndexRAG;
+namespace RAGBench;
 
 public class ProviderDropdownFilter(IOptions<Dictionary<string, ProviderRegistryEntry>> registry) : IParameterFilter
 {

@@ -2,10 +2,10 @@ using Microsoft.Extensions.Options;
 using Microsoft.OpenApi.Any;
 using Microsoft.OpenApi.Models;
 using Swashbuckle.AspNetCore.SwaggerGen;
-using VectorRAGvsPageIndexRAG.DTOs;
-using VectorRAGvsPageIndexRAG.Settings;
+using RAGBench.DTOs;
+using RAGBench.Settings;
 
-namespace VectorRAGvsPageIndexRAG;
+namespace RAGBench;
 
 public class ProviderModelSchemaFilter(
     IOptions<Dictionary<string, ProviderRegistryEntry>> registry) : ISchemaFilter

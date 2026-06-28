@@ -1,8 +1,8 @@
 using System.Text;
 using UglyToad.PdfPig;
-using VectorRAGvsPageIndexRAG.Services.Interfaces;
+using RAGBench.Services.Interfaces;
 
-namespace VectorRAGvsPageIndexRAG.Services;
+namespace RAGBench.Services;
 
 public class DocumentProcessor : IDocumentProcessor
 {

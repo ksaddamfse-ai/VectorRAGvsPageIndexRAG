@@ -1,6 +1,6 @@
-using VectorRAGvsPageIndexRAG.Services;
+using RAGBench.Services;
 
-namespace VectorRAGvsPageIndexRAG.Tests;
+namespace RAGBench.Tests;
 
 public class DocumentProcessorTests
 {

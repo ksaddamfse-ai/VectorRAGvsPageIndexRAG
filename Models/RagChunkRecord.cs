@@ -1,6 +1,6 @@
 using Microsoft.Extensions.VectorData;
 
-namespace VectorRAGvsPageIndexRAG.Models;
+namespace RAGBench.Models;
 
 public class RagChunkRecord
 {

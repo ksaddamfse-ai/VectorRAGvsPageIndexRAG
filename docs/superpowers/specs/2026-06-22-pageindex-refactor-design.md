@@ -306,7 +306,7 @@ Clean up: `InsertNodeTextAsync`, `GetNodeTextsAsync`, `GetNodeTextsByNodeIdsAsyn
 
 ```bash
 # Build
-dotnet build VectorRAGvsPageIndexRAG.sln
+dotnet build RAGBench.sln
 
 # Ingest
 curl -X POST 'https://localhost:51095/api/pageindex/documents?provider=OpenCode&model=deepseek-v4-flash-free&groupName=PDFs' \

@@ -1,6 +1,6 @@
-using VectorRAGvsPageIndexRAG.DTOs;
+using RAGBench.DTOs;
 
-namespace VectorRAGvsPageIndexRAG.Services.Interfaces;
+namespace RAGBench.Services.Interfaces;
 
 public interface IRagQueryService
 {

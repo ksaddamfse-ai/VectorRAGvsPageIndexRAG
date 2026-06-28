@@ -7,10 +7,10 @@ using Microsoft.SemanticKernel.Connectors.Qdrant;
 using OpenAI;
 using Qdrant.Client;
 using System.ClientModel;
-using VectorRAGvsPageIndexRAG.Services;
-using VectorRAGvsPageIndexRAG.Services.Interfaces;
-using VectorRAGvsPageIndexRAG;
-using VectorRAGvsPageIndexRAG.Settings;
+using RAGBench.Services;
+using RAGBench.Services.Interfaces;
+using RAGBench;
+using RAGBench.Settings;
 
 var builder = WebApplication.CreateBuilder(args);
 

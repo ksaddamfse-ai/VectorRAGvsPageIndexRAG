@@ -1,6 +1,6 @@
 {
   "profiles": {
-    "VectorRAGvsPageIndexRAG": {
+    "RAGBench": {
       "commandName": "Project",
       "launchBrowser": true,
       "launchUrl": "swagger",

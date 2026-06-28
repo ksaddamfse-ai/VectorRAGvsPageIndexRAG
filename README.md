@@ -1,6 +1,6 @@
 # Vector RAG vs Page Index RAG
 
-[![CI](https://github.com/saddam/VectorRAGvsPageIndexRAG/actions/workflows/ci.yml/badge.svg)](https://github.com/saddam/VectorRAGvsPageIndexRAG/actions/workflows/ci.yml)
+[![CI](https://github.com/ksaddamfse-ai/RAGBench/actions/workflows/ci.yml/badge.svg)](https://github.com/ksaddamfse-ai/RAGBench/actions/workflows/ci.yml)
 
 ASP.NET Core 10 Web API comparing Vector RAG and Page Index RAG strategies.
 
@@ -110,7 +110,7 @@ Open Swagger UI at `https://localhost:51095/swagger`.
 | `test-pdfs/resume.pdf` | 5 | Dr. Sarah Chen ML engineer CV (skills, experience) |
 | `test-pdfs/legal-contract.pdf` | 9 | Enterprise software license (clauses, GDPR, termination) |
 
-Regenerate with: `dotnet run --project Tools/PdfGenerator/VectorRAGvsPageIndexRAG.Tools.PdfGenerator.csproj`
+Regenerate with: `dotnet run --project Tools/PdfGenerator/RAGBench.Tools.PdfGenerator.csproj`
 
 ## Curl Examples
 

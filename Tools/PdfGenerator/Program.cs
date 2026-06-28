@@ -1,4 +1,4 @@
-using VectorRAGvsPageIndexRAG.Tools.PdfGenerator;
+using RAGBench.Tools.PdfGenerator;
 
 var outputDir = Path.Combine(Directory.GetCurrentDirectory(), "test-pdfs");
 Directory.CreateDirectory(outputDir);

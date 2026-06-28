@@ -1,4 +1,4 @@
-namespace VectorRAGvsPageIndexRAG.Services.Interfaces;
+namespace RAGBench.Services.Interfaces;
 
 public interface IDocumentProcessor
 {

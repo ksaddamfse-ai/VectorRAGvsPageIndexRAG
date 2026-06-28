@@ -1,10 +1,10 @@
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Options;
-using VectorRAGvsPageIndexRAG.Models;
-using VectorRAGvsPageIndexRAG.Services.Interfaces;
-using VectorRAGvsPageIndexRAG.Settings;
+using RAGBench.Models;
+using RAGBench.Services.Interfaces;
+using RAGBench.Settings;
 
-namespace VectorRAGvsPageIndexRAG.Services;
+namespace RAGBench.Services;
 
 public class SqlitePageIndexDatabase : IPageIndexDatabase
 {

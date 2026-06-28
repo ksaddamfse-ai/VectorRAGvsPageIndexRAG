@@ -1,7 +1,7 @@
 using Microsoft.Extensions.AI;
-using VectorRAGvsPageIndexRAG.Services.Interfaces;
+using RAGBench.Services.Interfaces;
 
-namespace VectorRAGvsPageIndexRAG.Services;
+namespace RAGBench.Services;
 
 public class MyAiService(IChatClientFactory clientFactory, ILogger<MyAiService> logger)
 {

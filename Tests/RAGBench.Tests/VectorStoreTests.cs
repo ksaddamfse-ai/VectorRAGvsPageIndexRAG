@@ -1,6 +1,6 @@
-using VectorRAGvsPageIndexRAG.Models;
+using RAGBench.Models;
 
-namespace VectorRAGvsPageIndexRAG.Tests;
+namespace RAGBench.Tests;
 
 public class VectorStoreTests
 {
