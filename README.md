@@ -145,24 +145,25 @@ Run against `test-pdfs/` using OpenCode / `deepseek-v4-flash-free`:
 
 | Question | Vector RAG (ms) | PageIndex (ms) | Vector Answer | PageIndex Answer |
 |----------|----------------:|---------------:|---------------|------------------|
-| What is the CloudSync API rate limit? | 9,986 | 35,870 | Free: 100/min, Pro: 1,000/min, Enterprise: 10,000/min, Premium: 50,000/min | Rate limits by plan: Free 100/min, Pro 1,000/min, Enterprise 10,000/min, Premium 50,000/min. OAuth token endpoint: 1000/min per client ID |
-| What programming languages does the candidate know? | 5,897 | 64,917 | Python, Java, C++, R, SQL, JavaScript, Go | Python, Java, C++, R, SQL, JavaScript, Go |
-| What are the termination clauses in this contract? | 13,263 | 15,346 | No termination clauses in retrieved chunks (Sections 8-9 only) | No termination clauses in context (Section 5 retrieved but not fully captured) |
-| Compare performance metrics across all sections | 32,916 | 80,364 | 95% accuracy, 40% latency reduction, 89% AUC churn model, 3.95 GPA | Rate limits 100-50,000 req/min by plan (focused on technical report only) |
-| What is the meaning of life? | 10,032 | 20,249 | No information about the meaning of life in context | No relevant sections found |
+| What is the CloudSync API rate limit? | 6,310 | 229,745 | Free: 100/min, Pro: 1,000/min, Enterprise: 10,000/min, Premium: 50,000/min | Free: 100/min, Pro: 1,000/min, Enterprise: 10,000/min, Premium: 50,000/min + OAuth 1000/min per client ID |
+| What programming languages does the candidate know? | 4,970 | 80,586 | Python, Java, C++, R, SQL, JavaScript, Go | Python, Java, C++, R, SQL, JavaScript, Go |
+| What are the termination clauses in this contract? | 10,920 | 63,456 | Section 5.1: Agreement continues for Subscription Term. Section 5.2: Either party may terminate for cause upon 30 days notice | No termination clauses in context (token budget cut off before Section 5 page text retrieved) |
+| Compare performance metrics across all sections | 38,020 | 400,000+ (timeout) | 95% accuracy, 40% latency reduction, 89% AUC churn model, 3.95 GPA | Timeout (too many Phase 2 LLM calls for broad query) |
+| What is the meaning of life? | 5,330 | 38,803 | No information about the meaning of life in context | No relevant sections found |
 
 ### Key Observations
 
 | Aspect | Vector RAG | Page Index RAG |
 |--------|------------|----------------|
 | **Ingestion speed** | Fast (~1-2s per PDF) | Slow (~90-215s per PDF, LLM per node) |
-| **Query latency** | 6-33s (embed + search + LLM) | 9-81s (2 LLM calls: navigate + answer) |
-| **Factual accuracy** | Good — retrieves exact chunks | Good — navigates to correct sections |
-| **Citations** | Chunks with similarity scores | Page numbers (e.g. "pages 5-6") |
+| **Query latency** | 5-38s (embed + search + LLM) | 39-230s (3 LLM calls: navigate + drill-down + answer) |
+| **Factual accuracy** | Good — retrieves exact chunks | Good — navigates to correct sections, but token budget may cut off context |
+| **Citations** | Chunks with similarity scores | Page numbers (e.g. "pages 5-6") via two-phase retrieval |
 | **Multi-document queries** | Struggles (chunks from all docs mixed) | Better (tree structure preserved per doc) |
 | **Out-of-scope handling** | Gracefully says "no info" | Gracefully says "no relevant sections" |
 | **Infrastructure** | Requires Qdrant + embedding API | SQLite only (zero external infra) |
 | **Embedding dependency** | Yes (NvidiaNim/external API) | No embeddings needed |
+| **Two-phase retrieval** | N/A | Phase 1 picks top-level, Phase 2 drills down (adds latency but improves precision for large docs) |
 
 ## Configuration
 

@@ -1,5 +1,3 @@
-using System.Text;
-using System.Text.Json;
 using Microsoft.Extensions.AI;
 using UglyToad.PdfPig;
 using VectorRAGvsPageIndexRAG.Models;
@@ -29,7 +27,8 @@ public class DocumentTreeBuilder(
         var client = clientFactory.GetClient($"{provider}__{model}")
             ?? throw new InvalidOperationException($"Client not found for {provider}/{model}");
 
-        await GenerateSummariesAsync(client, tree.Children);
+        var pageTextDict = pageTexts.ToDictionary(p => p.PageNumber, p => p.Text);
+        await GenerateSummariesAsync(client, tree.Children, pageTextDict);
 
         tree.DocId = $"pi-{Guid.NewGuid():N}"[..12];
         tree.FileName = fileName;
@@ -50,27 +49,40 @@ public class DocumentTreeBuilder(
         return result;
     }
 
-    private async Task GenerateSummariesAsync(IChatClient client, List<TreeNode> nodes)
+    private async Task GenerateSummariesAsync(IChatClient client, List<TreeNode> nodes,
+        Dictionary<int, string> pageTextDict)
     {
-        var tasks = nodes.Select(node => GenerateSingleSummaryAsync(client, node)).ToList();
+        var tasks = nodes.Select(node => GenerateSingleSummaryAsync(client, node, pageTextDict)).ToList();
         await Task.WhenAll(tasks);
 
         foreach (var node in nodes)
         {
             if (node.Children.Count > 0)
-                await GenerateSummariesAsync(client, node.Children);
+                await GenerateSummariesAsync(client, node.Children, pageTextDict);
         }
     }
 
-    private async Task GenerateSingleSummaryAsync(IChatClient client, TreeNode node)
+    private async Task GenerateSingleSummaryAsync(IChatClient client, TreeNode node,
+        Dictionary<int, string> pageTextDict)
     {
         if (node.StartPage == null || node.EndPage == null)
             return;
 
+        var sectionText = string.Join("\n",
+            Enumerable.Range(node.StartPage.Value, node.EndPage.Value - node.StartPage.Value + 1)
+                .Where(pageTextDict.ContainsKey)
+                .Select(page => $"[Page {page}] {pageTextDict[page]}"));
+
+        if (string.IsNullOrWhiteSpace(sectionText))
+            return;
+
+        var truncated = sectionText.Length > 3000 ? sectionText[..3000] + "..." : sectionText;
         var prompt = $"""
             Summarize this section in one sentence:
 
             {node.Title}
+
+            {truncated}
             """;
 
         try

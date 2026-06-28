@@ -99,6 +99,50 @@ public class SqlitePageIndexDatabase : IPageIndexDatabase
         tx.Commit();
     }
 
+    public async Task InsertDocumentWithPageTextsAsync(DocumentTree tree, string treeJson, int pageCount,
+        IEnumerable<(int pageNumber, string text)> pageTexts)
+    {
+        using var conn = CreateConnection();
+        using var tx = conn.BeginTransaction();
+
+        var insertDoc = conn.CreateCommand();
+        insertDoc.CommandText = """
+            INSERT INTO documents (doc_id, file_name, tree_json, group_name, page_count)
+            VALUES ($id, $name, $json, $group, $pageCount)
+            """;
+        insertDoc.Parameters.AddWithValue("$id", tree.DocId);
+        insertDoc.Parameters.AddWithValue("$name", tree.FileName);
+        insertDoc.Parameters.AddWithValue("$json", treeJson);
+        insertDoc.Parameters.AddWithValue("$group", tree.GroupName);
+        insertDoc.Parameters.AddWithValue("$pageCount", pageCount);
+        await insertDoc.ExecuteNonQueryAsync();
+
+        var insertText = conn.CreateCommand();
+        insertText.CommandText = """
+            INSERT OR IGNORE INTO page_texts (doc_id, page_number, text)
+            VALUES ($docId, $page, $text)
+            """;
+        var docIdParam = insertText.CreateParameter();
+        docIdParam.ParameterName = "$docId";
+        var pageParam = insertText.CreateParameter();
+        pageParam.ParameterName = "$page";
+        var textParam = insertText.CreateParameter();
+        textParam.ParameterName = "$text";
+        insertText.Parameters.Add(docIdParam);
+        insertText.Parameters.Add(pageParam);
+        insertText.Parameters.Add(textParam);
+
+        foreach (var (pageNumber, text) in pageTexts)
+        {
+            docIdParam.Value = tree.DocId;
+            pageParam.Value = pageNumber;
+            textParam.Value = text;
+            await insertText.ExecuteNonQueryAsync();
+        }
+
+        tx.Commit();
+    }
+
     public async Task<List<(string DocId, string TreeJson)>> GetDocumentTreesByGroupAsync(string groupName)
     {
         using var conn = CreateConnection();

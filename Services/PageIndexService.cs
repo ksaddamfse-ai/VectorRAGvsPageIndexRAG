@@ -27,8 +27,7 @@ public class PageIndexService(
         var treeJson = JsonSerializer.Serialize(tree);
 
         await database.InitializeAsync();
-        await database.InsertDocumentAsync(tree, treeJson, pageTexts.Count);
-        await database.InsertPageTextsAsync(tree.DocId, pageTexts);
+        await database.InsertDocumentWithPageTextsAsync(tree, treeJson, pageTexts.Count, pageTexts);
 
         logger.LogInformation("PageIndex ingested {File}: {DocId} ({Nodes} nodes, {Pages} pages, group={Group})",
             file.FileName, tree.DocId, tree.Children.Count, pageTexts.Count, groupName);
@@ -78,6 +77,8 @@ public class PageIndexService(
         if (selectedIds.Count == 0)
             return new PageIndexQueryResponse("No relevant sections found.", [], []);
 
+        selectedIds = await DrillDownAsync(client, request.Question, selectedIds, allNodes);
+
         var (context, citations) = await RetrieveContextAsync(allNodes, selectedIds, trees);
 
         if (string.IsNullOrWhiteSpace(context))
@@ -98,6 +99,58 @@ public class PageIndexService(
             answerResponse?.Text ?? "No answer generated.",
             [],
             citations);
+    }
+
+    private async Task<List<string>> DrillDownAsync(
+        IChatClient client, string question,
+        List<string> selectedIds, List<(string DocId, TreeNode Node)> allNodes)
+    {
+        var finalIds = new List<string>();
+
+        foreach (var selectedId in selectedIds)
+        {
+            var match = allNodes.FirstOrDefault(n => n.Node.NodeId == selectedId);
+            if (match.Node == null || match.Node.Children.Count == 0)
+            {
+                finalIds.Add(selectedId);
+                continue;
+            }
+
+            var subSkeleton = BuildSubSkeleton(match.Node.Children);
+            var drillPrompt = $"""
+                You are a document navigator. Below are sub-sections of "{match.Node.Title}".
+                Each sub-section has a title, summary, and page numbers.
+
+                {subSkeleton}
+
+                Question: {question}
+
+                Return ONLY a JSON array of node IDs that are most relevant to the question.
+                If none are relevant, return an empty array [].
+                Example: ["node_001", "node_003"]
+                """;
+
+            var drillResponse = await client.GetResponseAsync(drillPrompt);
+            var drillIds = ParseNodeIds(drillResponse?.Text ?? "[]");
+
+            if (drillIds.Count > 0)
+                finalIds.AddRange(drillIds);
+            else
+                finalIds.Add(selectedId);
+        }
+
+        return finalIds;
+    }
+
+    private static string BuildSubSkeleton(List<TreeNode> children)
+    {
+        var lines = new List<string>();
+        foreach (var node in children)
+        {
+            var pageInfo = node.StartPage.HasValue ? $" (pages {node.StartPage}-{node.EndPage})" : "";
+            lines.Add($"- {node.NodeId}: {node.Title}{pageInfo} — {node.Summary}");
+        }
+        return string.Join("\n", lines);
     }
 
     private async Task<(string Context, List<PageCitation> Citations)> RetrieveContextAsync(
@@ -123,20 +176,16 @@ public class PageIndexService(
                 {
                     var page = kvp.Key;
                     var text = kvp.Value;
-                    var estimatedTokens = text.Length / 4 + 1;
                     if (usedChars + text.Length > maxTokens * 4)
                         break;
 
                     contextParts.Add($"[Page {page}]\n{text}");
                     usedChars += text.Length;
                 }
-            }
 
-            citations.Add(new PageCitation(
-                node.Title,
-                docId,
-                node.StartPage ?? 0,
-                node.EndPage ?? 0));
+                if (node.StartPage.HasValue && node.EndPage.HasValue)
+                    citations.Add(new PageCitation(node.Title, docId, node.StartPage.Value, node.EndPage.Value));
+            }
         }
 
         return (string.Join("\n\n", contextParts), citations);
