@@ -46,7 +46,7 @@ public class RagIngestionService(
             await foreach (var record in collection.GetAsync(allGuids, null, cancellationToken: default))
                 existingSet.Add(record.Key);
         }
-        catch (Qdrant.Client.QdrantException)
+        catch (Exception ex) when (ex is Qdrant.Client.QdrantException or VectorStoreException)
         {
             // Collection doesn't exist yet — all chunks are new
         }

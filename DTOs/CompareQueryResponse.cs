@@ -17,5 +17,6 @@ public record RagResult(
 public record PageIndexResult(
     string Answer,
     List<PageIndexCitation> Citations,
+    List<PageCitation> PageCitations,
     string? Error = null,
     long TimeMs = 0);

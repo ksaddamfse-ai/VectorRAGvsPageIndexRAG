@@ -37,7 +37,7 @@ public class CompareController(
         var collName = string.IsNullOrWhiteSpace(request.CollectionName) ? "documents" : request.CollectionName;
         return Ok(new CompareQueryResponse(
             new RagResult(ragError ?? ragData?.Answer ?? "No result.", collName, ragData?.Chunks ?? [], ragError, ragMs),
-            new PageIndexResult(piError ?? piData?.Answer ?? "Document not found.", piData?.Citations ?? [], piError, piMs),
+            new PageIndexResult(piError ?? piData?.Answer ?? "Document not found.", piData?.Citations ?? [], piData?.PageCitations ?? [], piError, piMs),
             totalSw.ElapsedMilliseconds));
     }
 

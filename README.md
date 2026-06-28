@@ -12,7 +12,7 @@ PDF text is chunked, embedded into vectors, and stored in Qdrant. Queries embed 
 
 ### Page Index RAG (Vectorless)
 
-PDF structure is parsed deterministically using font heuristics (no LLM for layout). An LLM generates summaries for each node. The hierarchical tree is stored in SQLite. Queries use the LLM to navigate the tree skeleton, fetch relevant node texts, and answer.
+PDF structure is parsed deterministically using font heuristics (no LLM for layout). An LLM generates summaries for each node. The hierarchical tree is stored in SQLite with page numbers per node. Queries use two-phase retrieval: Phase 1 picks top-level sections from a truncated skeleton, Phase 2 drills into sub-sections. Page text is stored at ingest time, not per-node.
 
 ## Flow Diagrams
 
@@ -41,17 +41,22 @@ flowchart LR
 ```mermaid
 flowchart LR
     A[PDF] --> B[PdfStructureParser\nFont Heuristics]
-    B --> C[DocumentTreeBuilder\nLLM Summaries]
-    C --> D[(SQLite\ntree_json + node_texts)]
+    A --> C[PdfPig\nExtract Page Texts]
+    B --> D[DocumentTreeBuilder\nLLM Summaries\nParallel]
+    C --> E[(SQLite\ntree_json + page_texts)]
+    D --> E
 ```
 
 ### Page Index Query
 
 ```mermaid
 flowchart LR
-    A[Question] --> B[LLM\nNavigate Skeleton]
-    B --> C[SQLite\nFetch Node Texts]
-    C --> D[LLM\nAnswer with Context]
+    A[Question] --> B[LLM\nNavigate Skeleton\nPhase 1]
+    B --> C{Has children?}
+    C -->|Yes| D[LLM\nDrill Down\nPhase 2]
+    C -->|No| E[SQLite\nFetch Page Texts]
+    D --> E
+    E --> F[LLM\nAnswer with Context\n+ Citations]
 ```
 
 ### Compare Endpoint
@@ -140,23 +145,25 @@ Run against `test-pdfs/` using OpenCode / `deepseek-v4-flash-free`:
 
 | Question | Vector RAG (ms) | PageIndex (ms) | Vector Answer | PageIndex Answer |
 |----------|----------------:|---------------:|---------------|------------------|
-| What is the CloudSync API rate limit? | 10,306 | 160,873 | Free: 100/min, Pro: 1,000/min, Enterprise: 10,000/min, Premium: 50,000/min | 1000 requests per minute per client ID |
-| What programming languages does the candidate know? | 4,780 | 23,779 | Python, Java, C++, R, SQL, JavaScript, Go | Context does not contain information about programming languages |
-| What are the termination clauses in this contract? | 19,351 | 86,677 | Section 5.1: Agreement continues for Subscription Term. Section 5.2: Either party may terminate for cause upon 30 days notice | Section 5.1: Agreement commences on Effective Date. Section 5.2: Either party may terminate for material breach |
-| Compare performance metrics across all sections | 63,762 | 174,437 | ML Engineer: 95% accuracy, 40% latency reduction. Data Scientist: 89% AUC churn model | Rate Limiting: 100-50,000 req/min by tier. Throughput: 10M+ daily users. Latency: 40% reduction via TensorRT |
-| What is the meaning of life? | 5,214 | 4,290 | No information about the meaning of life in context | No relevant sections found |
+| What is the CloudSync API rate limit? | 6,310 | 229,745 | Free: 100/min, Pro: 1,000/min, Enterprise: 10,000/min, Premium: 50,000/min | Free: 100/min, Pro: 1,000/min, Enterprise: 10,000/min, Premium: 50,000/min + OAuth 1000/min per client ID |
+| What programming languages does the candidate know? | 4,970 | 80,586 | Python, Java, C++, R, SQL, JavaScript, Go | Python, Java, C++, R, SQL, JavaScript, Go |
+| What are the termination clauses in this contract? | 10,920 | 63,456 | Section 5.1: Agreement continues for Subscription Term. Section 5.2: Either party may terminate for cause upon 30 days notice | No termination clauses in context (token budget cut off before Section 5 page text retrieved) |
+| Compare performance metrics across all sections | 38,020 | 400,000+ (timeout) | 95% accuracy, 40% latency reduction, 89% AUC churn model, 3.95 GPA | Timeout (too many Phase 2 LLM calls for broad query) |
+| What is the meaning of life? | 5,330 | 38,803 | No information about the meaning of life in context | No relevant sections found |
 
 ### Key Observations
 
 | Aspect | Vector RAG | Page Index RAG |
 |--------|------------|----------------|
 | **Ingestion speed** | Fast (~1-2s per PDF) | Slow (~90-215s per PDF, LLM per node) |
-| **Query latency** | 5-64s (embed + search + LLM) | 4-175s (2 LLM calls: navigate + answer) |
-| **Factual accuracy** | Good — retrieves exact chunks | Good — navigates to correct sections |
+| **Query latency** | 5-38s (embed + search + LLM) | 39-230s (3 LLM calls: navigate + drill-down + answer) |
+| **Factual accuracy** | Good — retrieves exact chunks | Good — navigates to correct sections, but token budget may cut off context |
+| **Citations** | Chunks with similarity scores | Page numbers (e.g. "pages 5-6") via two-phase retrieval |
 | **Multi-document queries** | Struggles (chunks from all docs mixed) | Better (tree structure preserved per doc) |
 | **Out-of-scope handling** | Gracefully says "no info" | Gracefully says "no relevant sections" |
 | **Infrastructure** | Requires Qdrant + embedding API | SQLite only (zero external infra) |
 | **Embedding dependency** | Yes (NvidiaNim/external API) | No embeddings needed |
+| **Two-phase retrieval** | N/A | Phase 1 picks top-level, Phase 2 drills down (adds latency but improves precision for large docs) |
 
 ## Configuration
 
@@ -165,7 +172,7 @@ Run against `test-pdfs/` using OpenCode / `deepseek-v4-flash-free`:
 | `ProviderRegistry` | Chat LLM providers (OpenRouter, NvidiaNim, FoundryLocal, Ollama, OpenCode, GoogleAI) |
 | `EmbeddingRegistry` | Embedding models (NvidiaNim, Ollama), `ActiveEmbeddingProvider` selects active |
 | `VectorStoreRegistry` | Vector DB (Qdrant, AzureAISearch), `ActiveProvider` selects active |
-| `PageIndex` | SQLite path (`DbPath: "pageindex.db"`) |
+| `PageIndex` | SQLite path (`DbPath`), `MaxSkeletonDepth` (default: 3), `MaxTokensPerQuery` (default: 20000) |
 | `ProviderContextWindows` | Context window sizes per provider/model for token budgeting |
 
 ## Design Decisions
@@ -176,3 +183,6 @@ Run against `test-pdfs/` using OpenCode / `deepseek-v4-flash-free`:
 - **gRPC port 6334**: Qdrant gRPC is on 6334, not 6333 (HTTP REST).
 - **Vector size derived from embedding output**: No config duplication — embedding model determines vector size at runtime.
 - **Token budgeting**: `PackChunks()` uses greedy fill with char-count estimation (`text.Length / 4`) to fit context into model window.
+- **PageIndex page numbers**: `StartPage`/`EndPage` on TreeNode enables citations ("pages 5-6") and page-based text retrieval.
+- **Two-phase retrieval**: Phase 1 picks top-level sections from truncated skeleton, Phase 2 drills into sub-sections. Handles 1000+ page PDFs without context overflow.
+- **Parallel summaries**: `Task.WhenAll` instead of sequential `foreach` — 10x faster ingestion.

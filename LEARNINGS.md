@@ -185,6 +185,47 @@
 | PdfPig | 0.1.14 | PDF text extraction and font metadata |
 | Qdrant.Client | 1.18.1 | Qdrant gRPC client (underlying SK connector) |
 
+### PageIndex Refactor: Page Numbers vs Character Offsets
+- **Problem:** LLMs cannot reliably estimate character offsets — they tokenize text into subwords, not characters
+- **Solution:** Use page numbers (`StartPage`/`EndPage`) instead of character offsets on TreeNode
+- **Why page numbers work:** LLMs can read `<physical_index_6>` tags and identify page 6, but can't count to character 45,231
+- **PageIndex approach:** Uses `start_index`/`end_page` as physical page numbers with verification loop
+- **Our approach:** PdfStructureParser sets page numbers deterministically (no LLM needed for page assignment)
+- **Benefit:** Citations possible — "This answer is from pages 4-5"
+
+### PageIndex Refactor: Two-Phase Retrieval for Large Documents
+- **Problem:** Large documents (1000+ pages) produce trees with 100+ nodes — skeleton exceeds LLM context
+- **Solution:** Two-phase retrieval: Phase 1 picks top-level sections, Phase 2 drills into sub-sections
+- **Config:** `MaxSkeletonDepth` (default: 3) limits skeleton depth, `MaxTokensPerQuery` (default: 20000) limits context
+- **Small docs:** Phase 1 picks leaf node → skip Phase 2 → same as single-pass
+- **Large docs:** Phase 1 picks parent → Phase 2 drills into children → accurate retrieval
+- **PageIndex equivalent:** Their agentic loop (think → fetch → think → fetch) achieves same result but with more LLM calls
+
+### PageIndex Refactor: page_texts Table Replaces node_texts
+- **Old:** `node_texts` stored text per-node (redundant with tree, no page references)
+- **New:** `page_texts` stores text per-page (single source of truth, enables citations)
+- **Query:** `SELECT text FROM page_texts WHERE doc_id=? AND page_number BETWEEN start AND end`
+- **Benefit:** No duplication, cross-doc bug fixed (always filtered by doc_id), citations enabled
+- **Tradeoff:** Slightly more complex retrieval (page range vs direct node lookup)
+
+### PageIndex Refactor: Parallel Summary Generation
+- **Old:** Sequential `foreach` loop — 15 nodes × 2s = 30 seconds
+- **New:** `Task.WhenAll` — 15 nodes × 2s (parallel) = ~3 seconds
+- **PageIndex equivalent:** Their `asyncio.gather` achieves same parallelism
+- **Benefit:** 10x faster ingestion, same total token cost
+
+### PageIndex Refactor: Multi-PDF Group Queries
+- **PageIndex approach:** Single-document only — agent manually picks which doc to search
+- **Our approach:** Group-based — combined skeleton shows all docs, LLM picks from any
+- **Benefit:** Cross-document search is automatic, not manual
+- **Bug fixed:** Old `GetNodeTextsByNodeIdsAsync` didn't filter by `doc_id` — cross-doc node ID collisions
+
+### PageIndex Refactor: Deterministic Parsing vs LLM-Driven
+- **PageIndex:** LLM generates tree structure (expensive, non-deterministic, requires API key)
+- **Our approach:** PdfPig font heuristics generate structure (free, deterministic, works offline)
+- **Benefit:** Parse 1000 PDFs for free vs expensive LLM calls
+- **Tradeoff:** May miss semantic structure in PDFs with inconsistent fonts
+
 ## Config Structure
 
 ### ProviderRegistry

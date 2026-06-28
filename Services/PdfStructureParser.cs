@@ -16,7 +16,6 @@ public partial class PdfStructureParser
         using var pdf = PdfDocument.Open(pdfStream);
         var pages = pdf.GetPages().ToList();
 
-        // Phase 1: Collect all words with font metadata
         var allWords = new List<WordInfo>();
         foreach (var page in pages)
         {
@@ -39,7 +38,6 @@ public partial class PdfStructureParser
         if (allWords.Count == 0)
             return new DocumentTree { Title = Path.GetFileNameWithoutExtension(fileName) };
 
-        // Phase 2: Calculate font statistics
         var fontSizes = allWords.Where(w => w.FontSize > 0).Select(w => w.FontSize).ToList();
         var medianFontSize = fontSizes.Count > 0
             ? fontSizes.OrderBy(x => x).ElementAt(fontSizes.Count / 2)
@@ -47,25 +45,21 @@ public partial class PdfStructureParser
 
         var headerThreshold = medianFontSize * HeaderFontRatio;
 
-        // Phase 3: Detect section headers by font size
         var headerCandidates = allWords
             .Where(w => w.FontSize >= headerThreshold)
-            .GroupBy(w => new { w.PageNumber, w.Top })
+            .GroupBy(w => new { w.PageNumber, LineKey = Math.Round(w.Top / 3.0) * 3 })
             .Select(g => new HeaderCandidate
             {
                 PageNumber = g.Key.PageNumber,
-                Top = g.Key.Top,
-                Text = string.Join(" ", g.Select(w => w.Text)),
+                Top = g.Min(w => w.Top),
+                Text = string.Join(" ", g.OrderBy(w => w.Left).Select(w => w.Text)),
                 FontSize = g.First().FontSize
             })
             .OrderBy(h => h.PageNumber)
             .ThenBy(h => h.Top)
             .ToList();
 
-        // Phase 4: Build text blocks (paragraphs)
         var textBlocks = BuildTextBlocks(allWords, pages.Count);
-
-        // Phase 5: Build tree structure
         var tree = BuildTree(headerCandidates, textBlocks, fileName, pages.Count);
 
         return tree;
@@ -148,12 +142,14 @@ public partial class PdfStructureParser
 
         if (headers.Count == 0)
         {
-            var allText = string.Join("\n\n", textBlocks.Select(b => b.ToText()));
+            var firstPage = textBlocks.FirstOrDefault()?.PageNumber ?? 1;
+            var lastPage = textBlocks.LastOrDefault()?.PageNumber ?? 1;
             root.Children.Add(new TreeNode
             {
                 Title = "Full Document",
                 NodeId = "node_001",
-                Text = allText,
+                StartPage = firstPage,
+                EndPage = lastPage,
                 Summary = ""
             });
             return root;
@@ -162,7 +158,6 @@ public partial class PdfStructureParser
         var nodeStack = new Stack<(TreeNode Node, double FontSize)>();
         int nodeCounter = 0;
 
-        // Preamble before first header
         var firstHeader = headers[0];
         var preambleBlocks = textBlocks
             .Where(b => b.PageNumber < firstHeader.PageNumber ||
@@ -175,7 +170,8 @@ public partial class PdfStructureParser
             {
                 Title = "Preamble",
                 NodeId = $"node_{++nodeCounter:D3}",
-                Text = string.Join("\n\n", preambleBlocks.Select(b => b.ToText())),
+                StartPage = preambleBlocks.First().PageNumber,
+                EndPage = preambleBlocks.Last().PageNumber,
                 Summary = ""
             });
         }
@@ -189,7 +185,6 @@ public partial class PdfStructureParser
                 Summary = ""
             };
 
-            // Find text blocks for this section (until next header)
             var nextHeader = headers.FirstOrDefault(h =>
                 h.PageNumber > header.PageNumber ||
                 (h.PageNumber == header.PageNumber && h.Top > header.Top));
@@ -204,18 +199,15 @@ public partial class PdfStructureParser
 
             if (sectionBlocks.Count > 0)
             {
-                var headerText = header.Text;
-                var filteredBlocks = sectionBlocks.Where(b =>
-                {
-                    var blockText = b.ToText();
-                    return !blockText.StartsWith(headerText, StringComparison.OrdinalIgnoreCase);
-                }).ToList();
-
-                if (filteredBlocks.Count > 0)
-                    newNode.Text = string.Join("\n\n", filteredBlocks.Select(b => b.ToText()));
+                newNode.StartPage = sectionBlocks.First().PageNumber;
+                newNode.EndPage = sectionBlocks.Last().PageNumber;
+            }
+            else
+            {
+                newNode.StartPage = header.PageNumber;
+                newNode.EndPage = header.PageNumber;
             }
 
-            // Nesting: pop stack while current header is smaller/equal
             while (nodeStack.Count > 0 && header.FontSize <= nodeStack.Peek().FontSize)
                 nodeStack.Pop();
 
